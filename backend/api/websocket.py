@@ -270,7 +270,8 @@ async def handle_audio_message(
 
 async def cleanup_user(room_id: str, user_id: str):
     """
-    Clean up when a user disconnects
+    Clean up when a user disconnects.
+    Room is kept alive for 5 minutes to allow rejoining.
     """
     if room_id in rooms and user_id in rooms[room_id]:
         del rooms[room_id][user_id]
@@ -279,12 +280,12 @@ async def cleanup_user(room_id: str, user_id: str):
             del active_meetings[room_id]["users"][user_id]
             
         if not rooms[room_id]:
-            # Room is empty, clean up
+            # Room is empty, clean up connection tracking but keep meeting alive
             del rooms[room_id]
             if room_id in pipelines:
                 del pipelines[room_id]
-            if room_id in active_meetings:
-                del active_meetings[room_id]
+            # Schedule room deletion after 5 minutes grace period
+            asyncio.create_task(schedule_room_cleanup(room_id, delay_seconds=300))
         else:
             # Notify remaining partner
             partner_id = next(iter(rooms[room_id]))
@@ -295,3 +296,14 @@ async def cleanup_user(room_id: str, user_id: str):
                 })
             except:
                 pass
+
+
+async def schedule_room_cleanup(room_id: str, delay_seconds: int = 300):
+    """
+    Delete room after a grace period if no one rejoins.
+    """
+    await asyncio.sleep(delay_seconds)
+    # Only delete if room is still empty (no one rejoined)
+    if room_id in active_meetings and room_id not in rooms:
+        del active_meetings[room_id]
+        print(f"ROOM EXPIRED: {room_id} (no activity for {delay_seconds}s)")

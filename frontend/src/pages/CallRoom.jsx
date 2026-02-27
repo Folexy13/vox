@@ -16,19 +16,43 @@ const CallRoom = () => {
   const navigate = useNavigate();
   const { state } = useLocation();
   
-  // Redirect to setup if no user info
+  // Get user info from state or sessionStorage (for rejoining)
+  const sessionKey = `vox_room_${roomId}`;
+  const storedSession = useMemo(() => {
+    try {
+      const stored = sessionStorage.getItem(sessionKey);
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }, [sessionKey]);
+  
+  const userName = state?.userName || storedSession?.userName || null;
+  const userLanguage = state?.userLanguage || storedSession?.userLanguage || null;
+  const profileId = state?.profileId || storedSession?.profileId || null;
+  const userId = useMemo(() => {
+    // Reuse stored userId for rejoining, or generate new one
+    return storedSession?.userId || Math.random().toString(36).substring(7);
+  }, [storedSession]);
+  
+  // Store session info for rejoining
   useEffect(() => {
-    if (!state?.userName || !state?.userLanguage) {
+    if (userName && userLanguage) {
+      sessionStorage.setItem(sessionKey, JSON.stringify({
+        userName,
+        userLanguage,
+        profileId,
+        userId
+      }));
+    }
+  }, [sessionKey, userName, userLanguage, profileId, userId]);
+  
+  // Redirect to setup if no user info (neither from state nor sessionStorage)
+  useEffect(() => {
+    if (!userName || !userLanguage) {
       navigate(`/setup/${roomId}`);
     }
-  }, [state, navigate, roomId]);
-
-  const userName = state?.userName || 'User';
-  const userLanguage = state?.userLanguage || 'English';
-  const profileId = state?.profileId || null;
-  
-  // Generate stable user ID
-  const userId = useMemo(() => Math.random().toString(36).substring(7), []);
+  }, [userName, userLanguage, navigate, roomId]);
 
   // UI State
   const [micOn, setMicOn] = useState(true);
