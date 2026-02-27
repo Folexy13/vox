@@ -151,6 +151,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
             if "bytes" in message:
                 # Binary audio data
                 audio_data = message["bytes"]
+                print(f"BINARY AUDIO from {user_id}: {len(audio_data)} bytes")
                 await handle_audio_message(
                     room_id, user_id, audio_data, 
                     vad_speaking=True  # Default to speaking if no metadata

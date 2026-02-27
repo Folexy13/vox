@@ -260,7 +260,10 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
   const sendAudio = useCallback((audioBuffer, isSpeaking = true) => {
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
       // Send as binary for efficiency
+      console.log(`Sending audio: ${audioBuffer.byteLength} bytes, speaking: ${isSpeaking}`);
       ws.current.send(audioBuffer);
+    } else {
+      console.log(`Cannot send audio: ws=${!!ws.current}, readyState=${ws.current?.readyState}`);
     }
   }, []);
 
