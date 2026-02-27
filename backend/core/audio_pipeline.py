@@ -22,9 +22,16 @@ class AudioPipeline:
         self.user_languages: Dict[str, str] = {}  # user_id -> language_code
         self.user_profiles: Dict[str, str] = {}   # user_id -> voice_profile_id
         self.audio_buffers: Dict[str, bytes] = {} # user_id -> accumulated audio
+        self.silence_counters: Dict[str, int] = {} # user_id -> consecutive silence chunks
         
         # Processing state
         self.processing_status: Dict[str, str] = {}  # user_id -> status
+        
+        # Audio accumulation settings
+        # At 16kHz, 2 bytes per sample: 32000 bytes = 1 second of audio
+        self.MIN_AUDIO_BYTES = 32000  # Minimum 1 second before processing
+        self.MAX_AUDIO_BYTES = 160000  # Maximum 5 seconds
+        self.SILENCE_THRESHOLD = 3  # Process after 3 silence chunks
         
     def set_user_profile(self, user_id: str, profile_id: str):
         """Set voice profile for a user"""
@@ -43,23 +50,56 @@ class AudioPipeline:
     ) -> Tuple[Optional[bytes], Optional[dict]]:
         """
         Orchestrates the pipeline per chunk:
-        1. Handle interruption logic
-        2. Detect Language
-        3. Translate or Refine
-        4. Synthesize with Voice Profile
-        5. Return Audio and status
+        1. Accumulate audio until we have enough
+        2. Handle interruption logic
+        3. Detect Language
+        4. Translate or Refine
+        5. Synthesize with Voice Profile
+        6. Return Audio and status
         
         Returns: (processed_audio, status_update)
         """
-        # Step 1: Interruption Logic
-        await self.interruption_handler.handle_audio_arrival(user_id, partner_id, vad_speaking)
+        # Initialize buffers for this user if needed
+        if user_id not in self.audio_buffers:
+            self.audio_buffers[user_id] = b""
+            self.silence_counters[user_id] = 0
         
-        # If not speaking (VAD says silence), don't process
+        # Accumulate audio
+        self.audio_buffers[user_id] += audio_data
+        
+        # Track silence
         if not vad_speaking:
+            self.silence_counters[user_id] += 1
+        else:
+            self.silence_counters[user_id] = 0
+        
+        # Determine if we should process
+        buffer_size = len(self.audio_buffers[user_id])
+        should_process = False
+        
+        if buffer_size >= self.MAX_AUDIO_BYTES:
+            # Buffer is full, must process
+            should_process = True
+            print(f"BUFFER FULL for {user_id}: {buffer_size} bytes")
+        elif buffer_size >= self.MIN_AUDIO_BYTES and self.silence_counters[user_id] >= self.SILENCE_THRESHOLD:
+            # Have enough audio and detected end of speech
+            should_process = True
+            print(f"END OF SPEECH for {user_id}: {buffer_size} bytes after {self.silence_counters[user_id]} silence chunks")
+        
+        if not should_process:
+            # Keep accumulating
             return None, {"type": "STATUS", "status": "listening"}
         
+        # Get accumulated audio and clear buffer
+        accumulated_audio = self.audio_buffers[user_id]
+        self.audio_buffers[user_id] = b""
+        self.silence_counters[user_id] = 0
+        
+        # Step 1: Interruption Logic
+        await self.interruption_handler.handle_audio_arrival(user_id, partner_id, True)
+        
         # Step 2: Create task for processing to allow cancellation
-        task = asyncio.create_task(self._run_pipeline(user_id, partner_id, audio_data))
+        task = asyncio.create_task(self._run_pipeline(user_id, partner_id, accumulated_audio))
         self.interruption_handler.register_task(user_id, task)
         
         try:
