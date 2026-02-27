@@ -149,21 +149,19 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
     if (!roomId || !userId || !username) return;
     if (!shouldReconnect.current) return;
 
-    // Use environment variable for backend URL, fallback to same host with port 8001
+    // Backend URL from environment variable (required for production)
     const backendUrl = import.meta.env.VITE_BACKEND_URL;
-    let wsUrl;
     
-    if (backendUrl) {
-      // If backend URL is provided, use it (convert http/https to ws/wss)
-      const wsProtocol = backendUrl.startsWith('https') ? 'wss:' : 'ws:';
-      const backendHost = backendUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
-      wsUrl = `${wsProtocol}//${backendHost}/ws/${roomId}/${userId}`;
-    } else {
-      // Fallback: use same hostname with port 8001
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.hostname;
-      wsUrl = `${protocol}//${host}:8001/ws/${roomId}/${userId}`;
+    if (!backendUrl) {
+      console.error('VITE_BACKEND_URL environment variable is not set');
+      setStatus('error');
+      return;
     }
+    
+    // Convert http/https to ws/wss
+    const wsProtocol = backendUrl.startsWith('https') ? 'wss:' : 'ws:';
+    const backendHost = backendUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const wsUrl = `${wsProtocol}//${backendHost}/ws/${roomId}/${userId}`;
     
     console.log(`Connecting to ${wsUrl} as ${username}`);
     setStatus('connecting');

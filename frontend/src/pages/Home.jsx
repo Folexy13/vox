@@ -20,8 +20,8 @@ const Home = () => {
   const handleStartCall = async () => {
     setLoading(true);
     try {
-      const host = window.location.hostname;
-      const response = await fetch(`http://${host}:8001/api/rooms`, { method: 'POST' });
+      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/rooms`, { method: 'POST' });
       const data = await response.json();
       navigate(`/setup/${data.room_id}`);
     } catch (err) {
@@ -48,8 +48,8 @@ const Home = () => {
     }
     
     try {
-      const host = window.location.hostname;
-      const response = await fetch(`http://${host}:8001/api/rooms/${cleanCode}/verify`);
+      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const response = await fetch(`${backendUrl}/api/rooms/${cleanCode}/verify`);
       
       if (response.ok) {
         const data = await response.json();

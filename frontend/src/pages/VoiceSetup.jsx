@@ -54,8 +54,8 @@ const VoiceSetup = () => {
         formData.append('file', blob, 'profile.wav');
 
         try {
-          const host = window.location.hostname;
-          const response = await fetch(`http://${host}:8001/api/voice-profile`, {
+          const backendUrl = import.meta.env.VITE_BACKEND_URL;
+          const response = await fetch(`${backendUrl}/api/voice-profile`, {
             method: 'POST',
             body: formData,
           });
