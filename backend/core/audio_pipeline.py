@@ -91,18 +91,25 @@ class AudioPipeline:
             # Expecting PCM16 at 16kHz
             pcm_audio = self._ensure_pcm16(audio_data)
             
+            print(f"AUDIO RECEIVED: {len(audio_data)} bytes, PCM: {len(pcm_audio)} bytes")
+            
             if len(pcm_audio) < 1600:  # Less than 100ms of audio
+                print(f"AUDIO TOO SHORT: {len(pcm_audio)} bytes")
                 return None, None
             
             # Step 1: Detect language and transcribe
+            print(f"DETECTING LANGUAGE for {user_id}...")
             detection_result = await self.language_detector.detect_language(pcm_audio)
             
             detected_language = detection_result["language_code"]
             transcript = detection_result["transcript"]
             confidence = detection_result["confidence"]
             
+            print(f"DETECTION RESULT: lang={detected_language}, conf={confidence}, transcript='{transcript}'")
+            
             if not transcript or confidence < 0.5:
                 # Not enough confidence, pass through or wait for more audio
+                print(f"LOW CONFIDENCE or NO TRANSCRIPT - skipping")
                 return None, {"type": "STATUS", "status": "listening"}
             
             # Update user's detected language
@@ -151,7 +158,10 @@ class AudioPipeline:
                 )
             
             if not processed_text:
+                print(f"NO PROCESSED TEXT - skipping synthesis")
                 return None, status_update
+            
+            print(f"SYNTHESIZING: '{processed_text}' to {partner_language}")
             
             # Step 3: Synthesize to speech in partner's language
             # Use speaker's voice profile for voice matching
@@ -165,14 +175,18 @@ class AudioPipeline:
             
             if synthesized_audio:
                 # Add language update to status
+                print(f"SYNTHESIS SUCCESS: {len(synthesized_audio)} bytes")
                 status_update["transcript"] = transcript
                 status_update["translated"] = processed_text
                 return synthesized_audio, status_update
             else:
+                print(f"SYNTHESIS FAILED - no audio returned")
                 return None, status_update
                 
         except Exception as e:
             print(f"Pipeline error: {e}")
+            import traceback
+            traceback.print_exc()
             return None, {"type": "ERROR", "message": str(e)}
     
     def _ensure_pcm16(self, audio_data: bytes) -> bytes:
