@@ -64,6 +64,8 @@ class LanguageDetector:
             
         except Exception as e:
             print(f"Language detection error: {e}")
+            import traceback
+            traceback.print_exc()
             return {
                 "language_code": "en-US",
                 "confidence": 0.0,

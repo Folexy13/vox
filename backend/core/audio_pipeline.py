@@ -126,6 +126,10 @@ class AudioPipeline:
         """
         status_update = {"type": "STATUS", "status": "processing"}
         
+        # PASSTHROUGH MODE: Send raw audio directly to partner for testing
+        # Set to True to bypass translation and test audio transmission
+        PASSTHROUGH_MODE = True
+        
         try:
             # Convert incoming audio to proper format if needed
             # Expecting PCM16 at 16kHz
@@ -136,6 +140,11 @@ class AudioPipeline:
             if len(pcm_audio) < 1600:  # Less than 100ms of audio
                 print(f"AUDIO TOO SHORT: {len(pcm_audio)} bytes")
                 return None, None
+            
+            # PASSTHROUGH: Just send the audio directly without processing
+            if PASSTHROUGH_MODE:
+                print(f"PASSTHROUGH: Sending {len(pcm_audio)} bytes directly to partner")
+                return pcm_audio, {"type": "STATUS", "status": "passthrough"}
             
             # Step 1: Detect language and transcribe
             print(f"DETECTING LANGUAGE for {user_id}...")
