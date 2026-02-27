@@ -13,6 +13,12 @@ export const useAudioCapture = (onAudioChunk, enabled = true) => {
   const stream = useRef(null);
   const analyser = useRef(null);
   
+  // Store callback in ref to avoid stale closure issues
+  const onAudioChunkRef = useRef(onAudioChunk);
+  useEffect(() => {
+    onAudioChunkRef.current = onAudioChunk;
+  }, [onAudioChunk]);
+  
   // VAD state
   const vadState = useRef({
     speaking: false,
@@ -106,9 +112,9 @@ export const useAudioCapture = (onAudioChunk, enabled = true) => {
             // Convert Float32 to PCM16
             const pcm16 = float32ToPCM16(audioBuffer.current);
             
-            // Send audio with VAD state
-            if (onAudioChunk) {
-              onAudioChunk(pcm16, vadState.current.speaking);
+            // Send audio with VAD state (use ref to get latest callback)
+            if (onAudioChunkRef.current) {
+              onAudioChunkRef.current(pcm16, vadState.current.speaking);
             }
             
             // Clear buffer
