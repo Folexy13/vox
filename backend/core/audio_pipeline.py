@@ -32,10 +32,10 @@ class AudioPipeline:
         
         # Audio accumulation settings
         # At 16kHz, 2 bytes per sample: 32000 bytes = 1 second of audio
-        # For real-time conversation, we need smaller buffers
-        self.MIN_AUDIO_BYTES = 8000   # Minimum 0.25 second before processing (very fast response)
-        self.MAX_AUDIO_BYTES = 48000  # Maximum 1.5 seconds (quick turnaround)
-        self.SILENCE_THRESHOLD = 1    # Process after 1 silence chunk (immediate response)
+        # Balance between latency and recognition accuracy
+        self.MIN_AUDIO_BYTES = 16000  # Minimum 0.5 second before processing
+        self.MAX_AUDIO_BYTES = 64000  # Maximum 2 seconds
+        self.SILENCE_THRESHOLD = 2    # Process after 2 silence chunks
         
     def set_user_profile(self, user_id: str, profile_id: str):
         """Set voice profile for a user"""

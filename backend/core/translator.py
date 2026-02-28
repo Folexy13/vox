@@ -11,7 +11,8 @@ genai.configure(api_key=config.GOOGLE_API_KEY)
 
 class Translator:
     def __init__(self):
-        self.model = genai.GenerativeModel('gemini-2.0-flash')
+        # Use gemini-2.0-flash-lite for faster responses
+        self.model = genai.GenerativeModel('gemini-2.0-flash-lite')
         
         # Language name mapping for prompts
         # Only languages with good TTS support

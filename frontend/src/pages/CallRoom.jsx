@@ -62,22 +62,34 @@ const CallRoom = () => {
   const [showDetails, setShowDetails] = useState(true);
   const [copied, setCopied] = useState(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const [currentLanguage, setCurrentLanguage] = useState(userLanguage);
   
   // Video refs
   const userVideoRef = useRef(null);
   const partnerVideoRef = useRef(null);
   const localStreamRef = useRef(null);
 
+  // Available languages with codes
+  const languages = [
+    { name: 'English', code: 'en-US', flag: '🇺🇸' },
+    { name: 'French', code: 'fr-FR', flag: '🇫🇷' },
+    { name: 'Spanish', code: 'es-ES', flag: '🇪🇸' },
+    { name: 'Chinese', code: 'zh-CN', flag: '🇨🇳' },
+    { name: 'Japanese', code: 'ja-JP', flag: '🇯🇵' },
+    { name: 'Korean', code: 'ko-KR', flag: '🇰🇷' },
+  ];
+
   // Map language name to code
   const languageCodeMap = {
     'English': 'en-US',
     'French': 'fr-FR',
     'Spanish': 'es-ES',
-    'Yoruba': 'yo-NG',
-    'Igbo': 'ig-NG',
-    'Hausa': 'ha-NG',
+    'Chinese': 'zh-CN',
+    'Japanese': 'ja-JP',
+    'Korean': 'ko-KR',
   };
-  const userLanguageCode = languageCodeMap[userLanguage] || 'en-US';
+  const userLanguageCode = languageCodeMap[currentLanguage] || 'en-US';
 
   // WebSocket connection
   const { 
@@ -89,8 +101,23 @@ const CallRoom = () => {
     partnerStatus,
     sendAudio,
     sendMuteState,
+    updateLanguage,
     disconnect
   } = useWebSocket(roomId, userId, userName, userLanguageCode, profileId);
+
+  // Handle language change
+  const handleLanguageChange = useCallback((lang) => {
+    setCurrentLanguage(lang.name);
+    updateLanguage(lang.code);
+    setShowLanguagePicker(false);
+    // Update session storage
+    sessionStorage.setItem(sessionKey, JSON.stringify({
+      userName,
+      userLanguage: lang.name,
+      profileId,
+      userId
+    }));
+  }, [updateLanguage, sessionKey, userName, profileId, userId]);
 
   // Audio capture with callback
   const handleAudioChunk = useCallback((audioBuffer, isSpeaking) => {
@@ -324,10 +351,34 @@ const CallRoom = () => {
 
           {/* User status badges */}
           <div className="absolute top-3 right-3 sm:top-6 sm:right-6 z-20 flex items-center space-x-1.5 sm:space-x-2">
-            <div className="bg-google-blue/20 backdrop-blur-md px-2 py-1 sm:px-4 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-bold flex items-center border border-google-blue/30 text-blue-300">
-              <Languages className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1 sm:mr-2" />
-              <span className="hidden xs:inline">{userLanguage}</span>
-              <span className="xs:hidden">{userLanguage?.slice(0, 2)}</span>
+            {/* Clickable language badge */}
+            <div className="relative">
+              <button
+                onClick={() => setShowLanguagePicker(!showLanguagePicker)}
+                className="bg-google-blue/20 backdrop-blur-md px-2 py-1 sm:px-4 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-bold flex items-center border border-google-blue/30 text-blue-300 hover:bg-google-blue/30 transition-colors cursor-pointer"
+              >
+                <Languages className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1 sm:mr-2" />
+                <span className="hidden xs:inline">{currentLanguage}</span>
+                <span className="xs:hidden">{currentLanguage?.slice(0, 2)}</span>
+              </button>
+              
+              {/* Language picker dropdown */}
+              {showLanguagePicker && (
+                <div className="absolute top-full right-0 mt-2 bg-gray-900/95 backdrop-blur-md rounded-xl border border-white/10 shadow-xl overflow-hidden z-50 min-w-[140px]">
+                  {languages.map((lang) => (
+                    <button
+                      key={lang.code}
+                      onClick={() => handleLanguageChange(lang)}
+                      className={`w-full px-3 py-2 text-left text-sm flex items-center space-x-2 hover:bg-white/10 transition-colors ${
+                        currentLanguage === lang.name ? 'bg-google-blue/20 text-blue-300' : 'text-white'
+                      }`}
+                    >
+                      <span>{lang.flag}</span>
+                      <span>{lang.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="bg-white/5 backdrop-blur-md p-1.5 sm:p-2 rounded-lg sm:rounded-xl border border-white/10">
               {isConnected ? (
