@@ -60,8 +60,8 @@ class AudioPipeline:
         Returns: (processed_audio, status_update)
         """
         # PASSTHROUGH MODE: Send audio immediately without accumulation
-        # Set to False to enable full translation pipeline
-        PASSTHROUGH_MODE = False
+        # Set to True for direct audio (no translation), False for full pipeline
+        PASSTHROUGH_MODE = True
         
         if PASSTHROUGH_MODE:
             # In passthrough mode, send audio immediately for real-time communication

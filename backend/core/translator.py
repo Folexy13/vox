@@ -11,7 +11,7 @@ genai.configure(api_key=config.GOOGLE_API_KEY)
 
 class Translator:
     def __init__(self):
-        self.model = genai.GenerativeModel('gemini-pro')
+        self.model = genai.GenerativeModel('gemini-2.0-flash')
         
         # Language name mapping for prompts
         self.language_names = {

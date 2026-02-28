@@ -251,10 +251,15 @@ async def handle_audio_message(
             
             # Send relevant status to partner
             if status_update.get("type") == "STATUS":
+                # Get user's language from meeting data
+                user_language = None
+                if room_id in active_meetings and user_id in active_meetings[room_id].get("users", {}):
+                    user_language = active_meetings[room_id]["users"][user_id].get("language")
+                
                 partner_status = {
                     "type": "PARTNER_STATUS",
                     "status": status_update.get("status"),
-                    "partnerLanguage": status_update.get("from_language")
+                    "partnerLanguage": status_update.get("from_language") or user_language
                 }
                 await partner_ws.send_json(partner_status)
                 

@@ -245,16 +245,16 @@ const CallRoom = () => {
         }`}>
           <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent backdrop-blur-sm z-0" />
           
-          {/* Video element */}
-          {videoOn ? (
-            <video
-              ref={userVideoRef}
-              autoPlay
-              muted
-              playsInline
-              className="absolute inset-0 w-full h-full object-cover z-10"
-            />
-          ) : (
+          {/* Video element - always rendered but hidden when off */}
+          <video
+            ref={userVideoRef}
+            autoPlay
+            muted
+            playsInline
+            className={`absolute inset-0 w-full h-full object-cover z-10 ${videoOn ? 'block' : 'hidden'}`}
+          />
+          {/* Avatar when video is off */}
+          {!videoOn && (
             <div className="absolute inset-0 flex items-center justify-center z-10">
               <div className={`w-32 h-32 md:w-48 md:h-48 rounded-full bg-gradient-to-tr from-google-blue to-blue-400 flex items-center justify-center text-5xl font-light border-4 border-white/10 transition-all duration-300 ${
                 isSpeaking ? 'shadow-[0_0_70px_rgba(26,115,232,0.6)] scale-105' : 'shadow-[0_0_50px_rgba(26,115,232,0.3)]'
