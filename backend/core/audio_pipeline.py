@@ -19,7 +19,10 @@ class AudioPipeline:
         self.voice_synthesizer = VoiceSynthesizer()
         
         # User state tracking
-        self.user_languages: Dict[str, str] = {}  # user_id -> language_code
+        # CHOSEN language: what the user wants to HEAR (set from JOIN message)
+        self.user_languages: Dict[str, str] = {}  # user_id -> chosen_language_code
+        # DETECTED language: what language the user is SPEAKING (detected from audio)
+        self.detected_languages: Dict[str, str] = {}  # user_id -> detected_language_code
         self.user_profiles: Dict[str, str] = {}   # user_id -> voice_profile_id
         self.audio_buffers: Dict[str, bytes] = {} # user_id -> accumulated audio
         self.silence_counters: Dict[str, int] = {} # user_id -> consecutive silence chunks
@@ -176,11 +179,14 @@ class AudioPipeline:
                 print(f"VERY LOW CONFIDENCE ({confidence}) - skipping")
                 return None, {"type": "STATUS", "status": "listening"}
             
-            # Update user's detected language
-            self.user_languages[user_id] = detected_language
+            # Update user's DETECTED language (what they are speaking)
+            self.detected_languages[user_id] = detected_language
             
-            # Get partner's language
+            # Get partner's CHOSEN language (what they want to HEAR)
+            # This is set from the JOIN message and should NOT change based on detection
             partner_language = self.user_languages.get(partner_id, "en-US")
+            
+            print(f"TRANSLATION: detected={detected_language} -> partner_chosen={partner_language}")
             
             # Step 2: Determine if translation or accent clarification needed
             same_language = self.language_detector.are_same_language(
