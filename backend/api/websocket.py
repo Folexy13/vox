@@ -87,10 +87,11 @@ async def create_voice_profile(file: UploadFile = File(...)):
 
 
 @router.post("/api/voice-preview")
+@router.get("/api/voice-preview")
 async def preview_voice(
     text: str = "Hello! This is how you will sound in the meeting.",
     language: str = "en-US",
-    profile_id: str = None
+    profile_id: str = ""
 ):
     """
     Generate a voice preview using TTS with the user's voice profile.
@@ -99,6 +100,8 @@ async def preview_voice(
     from core.voice_synthesizer import VoiceSynthesizer
     from fastapi.responses import Response
     
+    print(f"Voice preview request: text='{text[:50]}...', language={language}, profile_id={profile_id}")
+    
     try:
         synthesizer = VoiceSynthesizer()
         
@@ -106,10 +109,11 @@ async def preview_voice(
         audio_bytes = await synthesizer.synthesize(
             text=text,
             language_code=language,
-            profile_id=profile_id
+            profile_id=profile_id if profile_id else None
         )
         
         if audio_bytes:
+            print(f"Voice preview generated: {len(audio_bytes)} bytes")
             # Return as audio/wav
             return Response(
                 content=audio_bytes,
@@ -119,10 +123,13 @@ async def preview_voice(
                 }
             )
         else:
+            print("Voice preview failed: no audio returned")
             raise HTTPException(status_code=500, detail="Failed to generate audio")
             
     except Exception as e:
         print(f"Voice preview error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 

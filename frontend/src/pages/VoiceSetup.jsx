@@ -22,6 +22,7 @@ const VoiceSetup = () => {
   // Voice preview state
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewPlaying, setPreviewPlaying] = useState(false);
+  const [recordedAudioUrl, setRecordedAudioUrl] = useState(null);
   const audioRef = useRef(null);
 
   const languages = [
@@ -69,6 +70,11 @@ const VoiceSetup = () => {
         setProcessing(true);
         
         const blob = new Blob(chunks, { type: 'audio/wav' });
+        
+        // Save the recorded audio for playback
+        const audioUrl = URL.createObjectURL(blob);
+        setRecordedAudioUrl(audioUrl);
+        
         const formData = new FormData();
         formData.append('file', blob, 'profile.wav');
 
@@ -121,55 +127,34 @@ const VoiceSetup = () => {
     setCaptured(true);
   };
 
-  // Voice preview - let users hear how they'll sound
-  const handleVoicePreview = async () => {
+  // Voice preview - play back the user's recorded voice
+  const handleVoicePreview = () => {
+    if (!recordedAudioUrl) {
+      showModal('info', 'No Recording', 'Please record your voice first to preview it.');
+      return;
+    }
+    
     if (previewPlaying && audioRef.current) {
       audioRef.current.pause();
+      audioRef.current.currentTime = 0;
       setPreviewPlaying(false);
       return;
     }
     
-    setPreviewLoading(true);
-    
-    try {
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
-      const selectedLangData = languages.find(l => l.name === language);
-      const langCode = selectedLangData?.code || 'en-US';
+    // Play the recorded audio
+    if (audioRef.current) {
+      audioRef.current.src = recordedAudioUrl;
+      audioRef.current.play();
+      setPreviewPlaying(true);
       
-      // Get preview audio from backend
-      const params = new URLSearchParams({
-        text: `Hello ${name || 'there'}! This is how you will sound in the meeting. Your voice profile has been calibrated for ${language}.`,
-        language: langCode,
-        profile_id: profileId || ''
-      });
+      audioRef.current.onended = () => {
+        setPreviewPlaying(false);
+      };
       
-      const response = await fetch(`${backendUrl}/api/voice-preview?${params}`, {
-        method: 'POST'
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to generate preview');
-      }
-      
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-      
-      // Play the audio
-      if (audioRef.current) {
-        audioRef.current.src = audioUrl;
-        audioRef.current.play();
-        setPreviewPlaying(true);
-        
-        audioRef.current.onended = () => {
-          setPreviewPlaying(false);
-          URL.revokeObjectURL(audioUrl);
-        };
-      }
-    } catch (err) {
-      console.error('Voice preview error:', err);
-      showModal('warning', 'Preview Unavailable', 'Could not generate voice preview. You can still continue to the meeting.');
-    } finally {
-      setPreviewLoading(false);
+      audioRef.current.onerror = () => {
+        setPreviewPlaying(false);
+        showModal('warning', 'Playback Error', 'Could not play the recording. Please try recording again.');
+      };
     }
   };
 
@@ -343,32 +328,30 @@ const VoiceSetup = () => {
                   </div>
                 )}
                 
-                {/* Voice Preview Button */}
-                <button
-                  onClick={handleVoicePreview}
-                  disabled={previewLoading}
-                  className="mt-6 bg-google-blue/20 hover:bg-google-blue/30 border border-google-blue/50 text-google-blue px-6 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 w-full max-w-sm"
-                >
-                  {previewLoading ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Generating Preview...
-                    </>
-                  ) : previewPlaying ? (
-                    <>
-                      <Pause className="w-5 h-5" />
-                      Stop Preview
-                    </>
-                  ) : (
-                    <>
-                      <Play className="w-5 h-5" />
-                      Preview Your Voice
-                    </>
-                  )}
-                </button>
-                <p className="text-xs text-gray-500 mt-2">
-                  Hear how you'll sound in the meeting
-                </p>
+                {/* Voice Preview Button - Play back recorded audio */}
+                {recordedAudioUrl && (
+                  <>
+                    <button
+                      onClick={handleVoicePreview}
+                      className="mt-6 bg-google-blue/20 hover:bg-google-blue/30 border border-google-blue/50 text-google-blue px-6 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 w-full max-w-sm"
+                    >
+                      {previewPlaying ? (
+                        <>
+                          <Pause className="w-5 h-5" />
+                          Stop Playback
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-5 h-5" />
+                          Play My Recording
+                        </>
+                      )}
+                    </button>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Listen to your recorded voice sample
+                    </p>
+                  </>
+                )}
                 
                 {/* Hidden audio element for playback */}
                 <audio ref={audioRef} className="hidden" />
