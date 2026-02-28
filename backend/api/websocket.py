@@ -268,14 +268,20 @@ async def handle_audio_message(
                 await partner_ws.send_json(partner_status)
                 
         except Exception as e:
+            import traceback
             print(f"Error sending status: {e}")
+            traceback.print_exc()
     
     # Send processed audio to partner
     if processed_audio:
         try:
+            print(f"SENDING AUDIO to partner: {len(processed_audio)} bytes")
             await partner_ws.send_bytes(processed_audio)
+            print(f"AUDIO SENT successfully")
         except Exception as e:
+            import traceback
             print(f"Error sending audio: {e}")
+            traceback.print_exc()
 
 
 async def cleanup_user(room_id: str, user_id: str):
