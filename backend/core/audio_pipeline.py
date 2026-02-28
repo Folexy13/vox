@@ -164,9 +164,16 @@ class AudioPipeline:
             
             print(f"DETECTION RESULT: lang={detected_language}, conf={confidence}, transcript='{transcript}'")
             
-            if not transcript or confidence < 0.5:
-                # Not enough confidence, pass through or wait for more audio
-                print(f"LOW CONFIDENCE or NO TRANSCRIPT - skipping")
+            if not transcript:
+                # No transcript detected - could be silence, noise, or unclear speech
+                # In passthrough mode, we would send the raw audio
+                # For now, just skip and wait for clearer speech
+                print(f"NO TRANSCRIPT DETECTED - skipping (confidence={confidence})")
+                return None, {"type": "STATUS", "status": "listening"}
+            
+            # Accept any transcript with confidence > 0 (Google already filtered low confidence)
+            if confidence < 0.01:
+                print(f"VERY LOW CONFIDENCE ({confidence}) - skipping")
                 return None, {"type": "STATUS", "status": "listening"}
             
             # Update user's detected language
