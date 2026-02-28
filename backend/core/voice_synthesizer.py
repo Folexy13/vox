@@ -14,17 +14,23 @@ class VoiceSynthesizer:
         
         # Default voice profiles per language
         # Using Journey voices for most natural sound
+        # Format: language_code -> (voice_name, actual_language_code_for_tts)
         self.voice_mapping = {
-            "en-US": "en-US-Journey-D",
-            "en-GB": "en-GB-Journey-D",
-            "en-NG": "en-US-Journey-D",  # Fallback to US for Nigerian English
-            "fr-FR": "fr-FR-Journey-D",
-            "es-ES": "es-ES-Journey-D",
-            "yo-NG": "en-US-Journey-D",  # Fallback - Yoruba TTS limited
-            "ig-NG": "en-US-Journey-D",  # Fallback - Igbo TTS limited
-            "ha-NG": "en-US-Journey-D",  # Fallback - Hausa TTS limited
-            "ar-SA": "ar-XA-Wavenet-A",
-            "zh-CN": "cmn-CN-Wavenet-A",
+            "en-US": ("en-US-Journey-D", "en-US"),
+            "en-GB": ("en-GB-Journey-D", "en-GB"),
+            "en-NG": ("en-US-Journey-D", "en-US"),  # Fallback to US for Nigerian English
+            "en-us": ("en-US-Journey-D", "en-US"),  # Handle lowercase
+            "fr-FR": ("fr-FR-Journey-D", "fr-FR"),
+            "fr-fr": ("fr-FR-Journey-D", "fr-FR"),  # Handle lowercase
+            "es-ES": ("es-ES-Journey-D", "es-ES"),
+            "es-es": ("es-ES-Journey-D", "es-ES"),  # Handle lowercase
+            "yo-NG": ("en-US-Journey-D", "en-US"),  # Fallback - Yoruba TTS limited, use English voice
+            "ig-NG": ("en-US-Journey-D", "en-US"),  # Fallback - Igbo TTS limited, use English voice
+            "ha-NG": ("en-US-Journey-D", "en-US"),  # Fallback - Hausa TTS limited, use English voice
+            "ar-SA": ("ar-XA-Wavenet-A", "ar-XA"),
+            "ar-x-gulf": ("ar-XA-Wavenet-A", "ar-XA"),  # Handle detected Arabic variant
+            "zh-CN": ("cmn-CN-Wavenet-A", "cmn-CN"),
+            "cmn-hans-cn": ("cmn-CN-Wavenet-A", "cmn-CN"),  # Handle detected Mandarin variant
         }
         
         # Default voice profile settings
@@ -74,16 +80,18 @@ class VoiceSynthesizer:
             # Load voice profile for pitch/tempo adjustments
             profile = await self.load_voice_profile(profile_id)
             
-            # Get appropriate voice for language
-            voice_name = self.voice_mapping.get(language_code, "en-US-Journey-D")
-            base_language = language_code.split("-")[0] + "-" + language_code.split("-")[1] if "-" in language_code else "en-US"
+            # Get appropriate voice for language (voice_name, tts_language_code)
+            voice_config = self.voice_mapping.get(language_code, self.voice_mapping.get(language_code.lower(), ("en-US-Journey-D", "en-US")))
+            voice_name, tts_language_code = voice_config
+            
+            print(f"TTS: text='{text[:50]}...', lang={language_code}, voice={voice_name}, tts_lang={tts_language_code}")
             
             # Configure synthesis input
             synthesis_input = texttospeech.SynthesisInput(text=text)
             
             # Configure voice selection
             voice = texttospeech.VoiceSelectionParams(
-                language_code=base_language,
+                language_code=tts_language_code,
                 name=voice_name,
             )
             
@@ -132,13 +140,13 @@ class VoiceSynthesizer:
         
         try:
             profile = await self.load_voice_profile(profile_id)
-            voice_name = self.voice_mapping.get(language_code, "en-US-Journey-D")
-            base_language = language_code.split("-")[0] + "-" + language_code.split("-")[1] if "-" in language_code else "en-US"
+            voice_config = self.voice_mapping.get(language_code, self.voice_mapping.get(language_code.lower(), ("en-US-Journey-D", "en-US")))
+            voice_name, tts_language_code = voice_config
             
             synthesis_input = texttospeech.SynthesisInput(ssml=ssml)
             
             voice = texttospeech.VoiceSelectionParams(
-                language_code=base_language,
+                language_code=tts_language_code,
                 name=voice_name,
             )
             
