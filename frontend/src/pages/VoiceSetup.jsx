@@ -22,9 +22,9 @@ const VoiceSetup = () => {
     { name: 'English', code: 'en-US', test: "The quick brown fox jumps over the lazy dog." },
     { name: 'French', code: 'fr-FR', test: "Le renard brun rapide saute par-dessus le chien paresseux." },
     { name: 'Spanish', code: 'es-ES', test: "El veloz zorro marrón salta sobre el perro perezoso." },
-    { name: 'Yoruba', code: 'yo-NG', test: "Akọ mọ́tò pupa yá kánkán fo lórí ajá tí ó lẹ." },
-    { name: 'Igbo', code: 'ig-NG', test: "Agụ owuru na-acha nchara nchara na-awụli elu n'elu nkita umengwụ." },
-    { name: 'Hausa', code: 'ha-NG', test: "Sauri launin ruwan kasa fox tsalle a kan malalaci kare." },
+    { name: 'Chinese', code: 'zh-CN', test: "快速的棕色狐狸跳过懒狗。" },
+    { name: 'Japanese', code: 'ja-JP', test: "素早い茶色のキツネが怠惰な犬を飛び越える。" },
+    { name: 'Korean', code: 'ko-KR', test: "빠른 갈색 여우가 게으른 개를 뛰어넘습니다." },
   ];
 
   const selectedLang = languages.find(l => l.name === language);

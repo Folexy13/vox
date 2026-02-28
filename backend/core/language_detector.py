@@ -10,15 +10,14 @@ class LanguageDetector:
     def __init__(self):
         self.client = speech.SpeechClient()
         # Supported languages with their codes
+        # Only languages with good TTS support
         self.supported_languages = [
             "en-US", "en-GB",  # English variants
             "fr-FR",  # French
             "es-ES",  # Spanish
-            "yo-NG",  # Yoruba (may not be fully supported)
-            "ig-NG",  # Igbo (may not be fully supported)
-            "ha-NG",  # Hausa (may not be fully supported)
-            "ar-SA",  # Arabic
-            "zh-CN",  # Mandarin
+            "zh-CN",  # Mandarin Chinese
+            "ja-JP",  # Japanese
+            "ko-KR",  # Korean
         ]
         
     async def detect_language(self, audio_data: bytes, sample_rate: int = 16000) -> dict:
@@ -38,7 +37,7 @@ class LanguageDetector:
                 encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
                 sample_rate_hertz=sample_rate,
                 language_code="en-US",  # Primary language
-                alternative_language_codes=["fr-FR", "es-ES", "ar-SA", "zh-CN"],
+                alternative_language_codes=["fr-FR", "es-ES", "zh-CN", "ja-JP", "ko-KR"],
                 enable_automatic_punctuation=True,
             )
             

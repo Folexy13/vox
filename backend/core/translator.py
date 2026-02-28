@@ -14,17 +14,22 @@ class Translator:
         self.model = genai.GenerativeModel('gemini-2.0-flash')
         
         # Language name mapping for prompts
+        # Only languages with good TTS support
         self.language_names = {
             "en-US": "American English",
             "en-GB": "British English",
-            "en-NG": "Nigerian English",
+            "en-us": "American English",
+            "en-gb": "British English",
             "fr-FR": "French",
+            "fr-fr": "French",
             "es-ES": "Spanish",
-            "yo-NG": "Yoruba",
-            "ig-NG": "Igbo",
-            "ha-NG": "Hausa",
-            "ar-SA": "Arabic",
+            "es-es": "Spanish",
             "zh-CN": "Mandarin Chinese",
+            "cmn-hans-cn": "Mandarin Chinese",
+            "ja-JP": "Japanese",
+            "ja-jp": "Japanese",
+            "ko-KR": "Korean",
+            "ko-kr": "Korean",
         }
     
     async def translate(self, text: str, source_language: str, target_language: str) -> str:

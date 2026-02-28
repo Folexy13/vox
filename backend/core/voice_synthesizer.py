@@ -13,24 +13,30 @@ class VoiceSynthesizer:
         self.storage_client = storage.Client()
         
         # Default voice profiles per language
-        # Using Journey voices for most natural sound
+        # Using Journey/Wavenet voices for most natural sound
         # Format: language_code -> (voice_name, actual_language_code_for_tts)
         self.voice_mapping = {
+            # English
             "en-US": ("en-US-Journey-D", "en-US"),
             "en-GB": ("en-GB-Journey-D", "en-GB"),
-            "en-NG": ("en-US-Journey-D", "en-US"),  # Fallback to US for Nigerian English
-            "en-us": ("en-US-Journey-D", "en-US"),  # Handle lowercase
+            "en-us": ("en-US-Journey-D", "en-US"),
+            "en-gb": ("en-GB-Journey-D", "en-GB"),
+            # French
             "fr-FR": ("fr-FR-Journey-D", "fr-FR"),
-            "fr-fr": ("fr-FR-Journey-D", "fr-FR"),  # Handle lowercase
+            "fr-fr": ("fr-FR-Journey-D", "fr-FR"),
+            # Spanish
             "es-ES": ("es-ES-Journey-D", "es-ES"),
-            "es-es": ("es-ES-Journey-D", "es-ES"),  # Handle lowercase
-            "yo-NG": ("en-US-Journey-D", "en-US"),  # Fallback - Yoruba TTS limited, use English voice
-            "ig-NG": ("en-US-Journey-D", "en-US"),  # Fallback - Igbo TTS limited, use English voice
-            "ha-NG": ("en-US-Journey-D", "en-US"),  # Fallback - Hausa TTS limited, use English voice
-            "ar-SA": ("ar-XA-Wavenet-A", "ar-XA"),
-            "ar-x-gulf": ("ar-XA-Wavenet-A", "ar-XA"),  # Handle detected Arabic variant
+            "es-es": ("es-ES-Journey-D", "es-ES"),
+            # Chinese (Mandarin)
             "zh-CN": ("cmn-CN-Wavenet-A", "cmn-CN"),
-            "cmn-hans-cn": ("cmn-CN-Wavenet-A", "cmn-CN"),  # Handle detected Mandarin variant
+            "cmn-hans-cn": ("cmn-CN-Wavenet-A", "cmn-CN"),
+            "cmn-CN": ("cmn-CN-Wavenet-A", "cmn-CN"),
+            # Japanese
+            "ja-JP": ("ja-JP-Wavenet-D", "ja-JP"),
+            "ja-jp": ("ja-JP-Wavenet-D", "ja-JP"),
+            # Korean
+            "ko-KR": ("ko-KR-Wavenet-D", "ko-KR"),
+            "ko-kr": ("ko-KR-Wavenet-D", "ko-KR"),
         }
         
         # Default voice profile settings
