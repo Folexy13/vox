@@ -43,19 +43,18 @@ class Translator:
         source_name = self.language_names.get(source_language, source_language)
         target_name = self.language_names.get(target_language, target_language)
         
-        prompt = f"""You are a real-time interpreter preserving not just meaning
-but emotional tone, cultural register, humor, and personal style.
+        prompt = f"""TASK: Translate this speech from {source_name} to {target_name}.
 
-Translate the following from {source_name} to {target_name}.
+INPUT: "{text}"
 
-Rules:
-- Preserve the speaker's emotional state exactly
-- Use natural spoken language, not formal written language
-- Preserve idioms by finding equivalent idioms in target language
-- If something cannot be translated without losing meaning, prioritize meaning over literalism
-- Return ONLY the translated text, nothing else
+RULES:
+1. Output ONLY the translation, nothing else
+2. Do NOT answer questions - just translate them
+3. Do NOT add explanations or commentary
+4. Preserve emotional tone and natural speech patterns
+5. If the input is a question, output the question translated (not an answer)
 
-Text to translate: {text}"""
+OUTPUT (translation only):"""
 
         try:
             response = await self.model.generate_content_async(prompt)
