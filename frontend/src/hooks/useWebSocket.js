@@ -144,6 +144,16 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
         setStatus('crosstalk');
         break;
         
+      case 'PONG':
+        // Heartbeat response received
+        lastPongTime.current = Date.now();
+        break;
+        
+      case 'PARTNER_HEARTBEAT':
+        // Partner's heartbeat status
+        setPartnerOnline(data.online);
+        break;
+        
       case 'ERROR':
         console.error('Server error:', data.message);
         break;
@@ -185,6 +195,7 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
       setIsConnected(true);
       setStatus('connected');
       reconnectAttempts.current = 0;
+      lastPongTime.current = Date.now();
       
       // Send JOIN message with user info
       ws.current.send(JSON.stringify({
@@ -193,6 +204,23 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
         language: userLanguage,
         profileId: profileId
       }));
+      
+      // Start heartbeat interval (every 10 seconds)
+      if (heartbeatInterval.current) {
+        clearInterval(heartbeatInterval.current);
+      }
+      heartbeatInterval.current = setInterval(() => {
+        if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+          ws.current.send(JSON.stringify({ type: 'PING' }));
+          
+          // Check if we haven't received a pong in 30 seconds
+          const timeSinceLastPong = Date.now() - lastPongTime.current;
+          if (timeSinceLastPong > 30000) {
+            console.warn('No heartbeat response in 30s, connection may be stale');
+            // Don't close immediately, let the server handle it
+          }
+        }
+      }, 10000);
     };
 
     ws.current.onmessage = async (event) => {
@@ -243,6 +271,12 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
   const disconnect = useCallback(() => {
     console.log('Disconnecting WebSocket...');
     shouldReconnect.current = false;
+    
+    // Clear heartbeat interval
+    if (heartbeatInterval.current) {
+      clearInterval(heartbeatInterval.current);
+      heartbeatInterval.current = null;
+    }
     
     // Send LEAVE message before closing
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
@@ -357,6 +391,7 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
     partnerJoined, 
     partnerName,
     partnerLanguage,
+    partnerOnline,
     messages, 
     status,
     partnerStatus,

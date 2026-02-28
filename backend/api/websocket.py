@@ -195,6 +195,25 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                         is_muted = data.get("muted", False)
                         print(f"User {user_id} {'muted' if is_muted else 'unmuted'}")
                     
+                    elif msg_type == "PING":
+                        # Heartbeat ping - respond with pong
+                        await websocket.send_json({"type": "PONG"})
+                        
+                        # Update last heartbeat time for this user
+                        if room_id in active_meetings and user_id in active_meetings[room_id].get("users", {}):
+                            active_meetings[room_id]["users"][user_id]["last_heartbeat"] = asyncio.get_event_loop().time()
+                            
+                            # Notify partner that this user is online
+                            partner_id = next((uid for uid in rooms.get(room_id, {}) if uid != user_id), None)
+                            if partner_id and partner_id in rooms.get(room_id, {}):
+                                try:
+                                    await rooms[room_id][partner_id].send_json({
+                                        "type": "PARTNER_HEARTBEAT",
+                                        "online": True
+                                    })
+                                except:
+                                    pass
+                    
                     elif msg_type == "LEAVE":
                         # User is leaving the call
                         print(f"User {user_id} leaving room {room_id}")
@@ -306,6 +325,12 @@ async def cleanup_user(room_id: str, user_id: str):
             # Notify remaining partner
             partner_id = next(iter(rooms[room_id]))
             try:
+                # Send partner offline notification
+                await rooms[room_id][partner_id].send_json({
+                    "type": "PARTNER_HEARTBEAT",
+                    "online": False
+                })
+                # Also send partner left message
                 await rooms[room_id][partner_id].send_json({
                     "type": "PARTNER_LEFT", 
                     "message": "Partner disconnected."
