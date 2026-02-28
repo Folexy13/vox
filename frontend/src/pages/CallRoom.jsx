@@ -601,13 +601,14 @@ const CallRoom = () => {
         </div>
       </div>
       
-      {/* Live Transcript Panel */}
+      {/* Live Transcript Panel - Side slider */}
       <TranscriptPanel
         transcripts={transcripts}
         isOpen={showTranscript}
         onToggle={() => setShowTranscript(!showTranscript)}
         userName={userName}
-        partnerName={partnerName}
+        partnerName={partnerName || 'Partner'}
+        userLanguage={currentLanguage}
       />
     </div>
   );
