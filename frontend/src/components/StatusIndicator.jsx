@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Mic, Languages, AlertCircle, Loader2, Volume2 } from 'lucide-react';
+import { Sparkles, Mic, Languages, AlertCircle, Loader2, Volume2, WifiOff, RefreshCw } from 'lucide-react';
 
 /**
  * StatusIndicator Component
@@ -108,6 +108,36 @@ const StatusIndicator = ({ status, partnerStatus, className = '' }) => {
           bgColor: 'bg-gray-500/20',
           borderColor: 'border-gray-500/30',
           animate: 'animate-spin',
+        };
+        
+      case 'reconnecting':
+        return {
+          icon: RefreshCw,
+          text: 'Reconnecting...',
+          color: 'text-google-yellow',
+          bgColor: 'bg-google-yellow/20',
+          borderColor: 'border-google-yellow/30',
+          animate: 'animate-spin',
+        };
+        
+      case 'error':
+        return {
+          icon: WifiOff,
+          text: 'Connection failed',
+          color: 'text-google-red',
+          bgColor: 'bg-google-red/20',
+          borderColor: 'border-google-red/30',
+          animate: '',
+        };
+        
+      case 'disconnected':
+        return {
+          icon: WifiOff,
+          text: 'Disconnected',
+          color: 'text-gray-400',
+          bgColor: 'bg-gray-500/20',
+          borderColor: 'border-gray-500/30',
+          animate: '',
         };
         
       default:

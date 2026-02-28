@@ -13,6 +13,8 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
   const [status, setStatus] = useState('connecting');
   const [partnerStatus, setPartnerStatus] = useState('idle');
   
+  const [partnerOnline, setPartnerOnline] = useState(true);
+  
   const ws = useRef(null);
   const audioContext = useRef(null);
   const audioQueue = useRef([]);
@@ -20,6 +22,8 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 3;
   const shouldReconnect = useRef(true);
+  const heartbeatInterval = useRef(null);
+  const lastPongTime = useRef(Date.now());
 
   // Initialize audio context for playback
   const initAudioContext = useCallback(() => {
@@ -211,19 +215,26 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
 
     ws.current.onerror = (err) => {
       console.error('WebSocket Error:', err);
-      setStatus('error');
+      // Don't set error status immediately, let onclose handle reconnection
+      if (reconnectAttempts.current >= maxReconnectAttempts) {
+        setStatus('error');
+      }
     };
 
     ws.current.onclose = (event) => {
       console.log('WebSocket Closed:', event.code, event.reason);
       setIsConnected(false);
-      setStatus('disconnected');
       
       // Attempt reconnection only if we should
       if (shouldReconnect.current && reconnectAttempts.current < maxReconnectAttempts) {
         reconnectAttempts.current++;
         console.log(`Reconnecting... Attempt ${reconnectAttempts.current}`);
+        setStatus('reconnecting');
         setTimeout(connect, 2000);
+      } else if (reconnectAttempts.current >= maxReconnectAttempts) {
+        setStatus('error');
+      } else {
+        setStatus('disconnected');
       }
     };
   }, [roomId, userId, username, userLanguage, profileId, processAudioQueue, handleControlMessage]);

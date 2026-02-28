@@ -4,12 +4,13 @@ import {
   Mic, MicOff, Video, VideoOff, PhoneOff, 
   MoreVertical, Share, MessageSquare, Info, 
   Settings, Users, Languages, Copy, Check,
-  Sparkles, Wifi, WifiOff, Eye
+  Sparkles, Wifi, WifiOff, Eye, Loader2
 } from 'lucide-react';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useAudioCapture } from '../hooks/useAudioCapture';
 import StatusIndicator from '../components/StatusIndicator';
 import Modal from '../components/Modal';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 const CallRoom = () => {
   const { roomId } = useParams();
@@ -225,6 +226,53 @@ const CallRoom = () => {
         onConfirm={handleEndCall}
         onCancel={() => setShowLeaveModal(false)}
       />
+
+      {/* Joining/Reconnecting Loader Overlay */}
+      {(status === 'connecting' || status === 'reconnecting') && (
+        <div className="absolute inset-0 z-[100] bg-[#121212]/95 backdrop-blur-sm flex flex-col items-center justify-center">
+          <div className="flex flex-col items-center space-y-6">
+            <div className="relative">
+              <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-google-blue to-blue-400 flex items-center justify-center animate-pulse">
+                <Loader2 className="w-10 h-10 text-white animate-spin" />
+              </div>
+              <div className="absolute inset-0 rounded-full border-4 border-google-blue/30 animate-ping" />
+            </div>
+            <div className="text-center">
+              <h2 className="text-xl font-medium text-white mb-2">
+                {status === 'connecting' ? 'Joining Meeting...' : 'Reconnecting...'}
+              </h2>
+              <p className="text-sm text-gray-400">
+                {status === 'connecting' 
+                  ? 'Setting up your connection' 
+                  : 'Please wait while we restore your connection'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Connection Error Overlay */}
+      {status === 'error' && (
+        <div className="absolute inset-0 z-[100] bg-[#121212]/95 backdrop-blur-sm flex flex-col items-center justify-center">
+          <div className="flex flex-col items-center space-y-6 max-w-md text-center px-6">
+            <div className="w-20 h-20 rounded-full bg-google-red/20 flex items-center justify-center">
+              <WifiOff className="w-10 h-10 text-google-red" />
+            </div>
+            <div>
+              <h2 className="text-xl font-medium text-white mb-2">Connection Failed</h2>
+              <p className="text-sm text-gray-400 mb-6">
+                Unable to connect to the meeting. Please check your internet connection and try again.
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-6 py-3 bg-google-blue hover:bg-blue-600 rounded-xl text-white font-medium transition-colors"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Status Bar */}
       <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50">
