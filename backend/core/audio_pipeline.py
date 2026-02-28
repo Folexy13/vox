@@ -241,30 +241,11 @@ class AudioPipeline:
     
     def _ensure_pcm16(self, audio_data: bytes) -> bytes:
         """
-        Ensure audio is in PCM16 format
-        Handles conversion from Float32 if needed
+        Ensure audio is in PCM16 format.
+        Frontend sends PCM16 directly (2 bytes per sample, little-endian).
+        Just return the data as-is since it's already in the correct format.
         """
-        # Check if it's Float32 data (from Web Audio API)
-        # Float32 samples are 4 bytes each, PCM16 are 2 bytes
-        if len(audio_data) % 4 == 0:
-            try:
-                # Try to interpret as Float32 and convert to PCM16
-                num_samples = len(audio_data) // 4
-                float_samples = struct.unpack(f'{num_samples}f', audio_data)
-                
-                # Convert to PCM16
-                pcm_samples = []
-                for sample in float_samples:
-                    # Clamp to [-1, 1] and scale to int16 range
-                    clamped = max(-1.0, min(1.0, sample))
-                    pcm_sample = int(clamped * 32767)
-                    pcm_samples.append(pcm_sample)
-                
-                return struct.pack(f'{len(pcm_samples)}h', *pcm_samples)
-            except:
-                pass
-        
-        # Already PCM16 or unknown format, return as-is
+        # Frontend already sends PCM16 data, no conversion needed
         return audio_data
     
     def get_call_state(self) -> str:
