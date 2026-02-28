@@ -235,8 +235,8 @@ const CallRoom = () => {
       </div>
 
       {/* Main Grid Section */}
-      <div className={`flex-1 p-6 pt-20 relative transition-all duration-700 ease-in-out ${
-        partnerJoined ? 'grid grid-cols-1 md:grid-cols-2 gap-6' : 'flex items-center justify-center'
+      <div className={`flex-1 p-3 sm:p-6 pt-16 sm:pt-20 relative transition-all duration-700 ease-in-out ${
+        partnerJoined ? 'grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-6' : 'flex items-center justify-center'
       }`}>
         
         {/* User Card */}
@@ -256,8 +256,8 @@ const CallRoom = () => {
           {/* Avatar when video is off */}
           {!videoOn && (
             <div className="absolute inset-0 flex items-center justify-center z-10">
-              <div className={`w-32 h-32 md:w-48 md:h-48 rounded-full bg-gradient-to-tr from-google-blue to-blue-400 flex items-center justify-center text-5xl font-light border-4 border-white/10 transition-all duration-300 ${
-                isSpeaking ? 'shadow-[0_0_70px_rgba(26,115,232,0.6)] scale-105' : 'shadow-[0_0_50px_rgba(26,115,232,0.3)]'
+              <div className={`w-24 h-24 sm:w-32 sm:h-32 md:w-48 md:h-48 rounded-full bg-gradient-to-tr from-google-blue to-blue-400 flex items-center justify-center text-3xl sm:text-4xl md:text-5xl font-light border-2 sm:border-4 border-white/10 transition-all duration-300 ${
+                isSpeaking ? 'shadow-[0_0_50px_rgba(26,115,232,0.6)] sm:shadow-[0_0_70px_rgba(26,115,232,0.6)] scale-105' : 'shadow-[0_0_30px_rgba(26,115,232,0.3)] sm:shadow-[0_0_50px_rgba(26,115,232,0.3)]'
               }`}>
                 {userName.charAt(0).toUpperCase()}
               </div>
@@ -265,40 +265,42 @@ const CallRoom = () => {
           )}
 
           {/* User info badge */}
-          <div className="absolute bottom-6 left-6 z-20 flex items-center bg-black/40 backdrop-blur-md px-4 py-2 rounded-xl text-sm font-medium border border-white/10">
-            <div className="mr-3 flex space-x-1">
-              <div className={`w-1 h-3 bg-google-blue rounded-full ${isSpeaking ? 'animate-pulse' : 'opacity-20'}`} />
-              <div className={`w-1 h-5 bg-blue-400 rounded-full ${isSpeaking ? 'animate-pulse delay-75' : 'opacity-20'}`} />
-              <div className={`w-1 h-2 bg-google-blue/50 rounded-full ${isSpeaking ? 'animate-pulse delay-150' : 'opacity-20'}`} />
+          <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 z-20 flex items-center bg-black/40 backdrop-blur-md px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium border border-white/10">
+            <div className="mr-2 sm:mr-3 flex space-x-0.5 sm:space-x-1">
+              <div className={`w-0.5 sm:w-1 h-2 sm:h-3 bg-google-blue rounded-full ${isSpeaking ? 'animate-pulse' : 'opacity-20'}`} />
+              <div className={`w-0.5 sm:w-1 h-3 sm:h-5 bg-blue-400 rounded-full ${isSpeaking ? 'animate-pulse delay-75' : 'opacity-20'}`} />
+              <div className={`w-0.5 sm:w-1 h-1.5 sm:h-2 bg-google-blue/50 rounded-full ${isSpeaking ? 'animate-pulse delay-150' : 'opacity-20'}`} />
             </div>
-            {userName} (You)
+            <span className="truncate max-w-[100px] sm:max-w-none">{userName}</span> <span className="hidden sm:inline ml-1">(You)</span>
           </div>
 
           {/* User status badges */}
-          <div className="absolute top-6 right-6 z-20 flex items-center space-x-2">
-            <div className="bg-google-blue/20 backdrop-blur-md px-4 py-1.5 rounded-full text-xs font-bold flex items-center border border-google-blue/30 text-blue-300">
-              <Languages className="w-3.5 h-3.5 mr-2" />
-              {userLanguage}
+          <div className="absolute top-3 right-3 sm:top-6 sm:right-6 z-20 flex items-center space-x-1.5 sm:space-x-2">
+            <div className="bg-google-blue/20 backdrop-blur-md px-2 py-1 sm:px-4 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-bold flex items-center border border-google-blue/30 text-blue-300">
+              <Languages className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1 sm:mr-2" />
+              <span className="hidden xs:inline">{userLanguage}</span>
+              <span className="xs:hidden">{userLanguage?.slice(0, 2)}</span>
             </div>
-            <div className="bg-white/5 backdrop-blur-md p-2 rounded-xl border border-white/10">
+            <div className="bg-white/5 backdrop-blur-md p-1.5 sm:p-2 rounded-lg sm:rounded-xl border border-white/10">
               {isConnected ? (
-                <Wifi className="w-4 h-4 text-google-green" />
+                <Wifi className="w-3 h-3 sm:w-4 sm:h-4 text-google-green" />
               ) : (
-                <WifiOff className="w-4 h-4 text-google-red" />
+                <WifiOff className="w-3 h-3 sm:w-4 sm:h-4 text-google-red" />
               )}
             </div>
             {!micOn && (
-              <div className="bg-google-red/20 backdrop-blur-md p-2 rounded-xl border border-google-red/30">
-                <MicOff className="w-4 h-4 text-google-red" />
+              <div className="bg-google-red/20 backdrop-blur-md p-1.5 sm:p-2 rounded-lg sm:rounded-xl border border-google-red/30">
+                <MicOff className="w-3 h-3 sm:w-4 sm:h-4 text-google-red" />
               </div>
             )}
           </div>
 
           {/* Lip reading indicator (when video is on) */}
           {videoOn && (
-            <div className="absolute top-6 left-6 z-20 bg-google-green/20 backdrop-blur-md px-3 py-1.5 rounded-full text-xs font-bold flex items-center border border-google-green/30 text-green-300">
-              <Eye className="w-3.5 h-3.5 mr-2" />
-              Lip Reading Active
+            <div className="absolute top-3 left-3 sm:top-6 sm:left-6 z-20 bg-google-green/20 backdrop-blur-md px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-bold flex items-center border border-google-green/30 text-green-300">
+              <Eye className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Lip Reading Active</span>
+              <span className="sm:hidden">Lip Read</span>
             </div>
           )}
         </div>
@@ -310,10 +312,10 @@ const CallRoom = () => {
             
             <div className="absolute inset-0 flex items-center justify-center z-10">
               <div className="relative">
-                <div className={`w-32 h-32 md:w-48 md:h-48 rounded-full bg-gradient-to-tr from-google-red to-rose-400 flex items-center justify-center text-5xl font-light border-4 border-white/10 transition-all duration-300 ${
+                <div className={`w-24 h-24 sm:w-32 sm:h-32 md:w-48 md:h-48 rounded-full bg-gradient-to-tr from-google-red to-rose-400 flex items-center justify-center text-3xl sm:text-4xl md:text-5xl font-light border-2 sm:border-4 border-white/10 transition-all duration-300 ${
                   partnerStatus === 'translating' || partnerStatus === 'reshaping_accent' 
-                    ? 'shadow-[0_0_70px_rgba(234,67,53,0.6)] scale-105 animate-pulse' 
-                    : 'shadow-[0_0_50px_rgba(234,67,53,0.3)]'
+                    ? 'shadow-[0_0_50px_rgba(234,67,53,0.6)] sm:shadow-[0_0_70px_rgba(234,67,53,0.6)] scale-105 animate-pulse' 
+                    : 'shadow-[0_0_30px_rgba(234,67,53,0.3)] sm:shadow-[0_0_50px_rgba(234,67,53,0.3)]'
                 }`}>
                   {partnerName.charAt(0).toUpperCase()}
                 </div>
@@ -321,28 +323,29 @@ const CallRoom = () => {
             </div>
 
             {/* Partner info badge */}
-            <div className="absolute bottom-6 left-6 z-20 flex items-center bg-black/40 backdrop-blur-md px-4 py-2 rounded-xl text-sm font-medium border border-white/10">
-              {partnerName}
-              <div className="ml-3 flex space-x-1">
-                <div className={`w-1 h-3 bg-white rounded-full ${partnerStatus !== 'idle' ? 'animate-pulse' : 'opacity-20'}`} />
-                <div className={`w-1 h-2 bg-white rounded-full ${partnerStatus !== 'idle' ? 'animate-pulse delay-75' : 'opacity-20'}`} />
-                <div className={`w-1 h-4 bg-white rounded-full ${partnerStatus !== 'idle' ? 'animate-pulse delay-150' : 'opacity-20'}`} />
+            <div className="absolute bottom-3 left-3 sm:bottom-6 sm:left-6 z-20 flex items-center bg-black/40 backdrop-blur-md px-2.5 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl text-xs sm:text-sm font-medium border border-white/10">
+              <span className="truncate max-w-[100px] sm:max-w-none">{partnerName}</span>
+              <div className="ml-2 sm:ml-3 flex space-x-0.5 sm:space-x-1">
+                <div className={`w-0.5 sm:w-1 h-2 sm:h-3 bg-white rounded-full ${partnerStatus !== 'idle' ? 'animate-pulse' : 'opacity-20'}`} />
+                <div className={`w-0.5 sm:w-1 h-1.5 sm:h-2 bg-white rounded-full ${partnerStatus !== 'idle' ? 'animate-pulse delay-75' : 'opacity-20'}`} />
+                <div className={`w-0.5 sm:w-1 h-2.5 sm:h-4 bg-white rounded-full ${partnerStatus !== 'idle' ? 'animate-pulse delay-150' : 'opacity-20'}`} />
               </div>
             </div>
 
             {/* Partner language badge */}
-            <div className="absolute top-6 right-6 z-20 flex items-center space-x-2">
-              <div className="bg-google-red/20 backdrop-blur-md px-4 py-1.5 rounded-full text-xs font-bold flex items-center border border-google-red/30 text-rose-300">
-                <Languages className="w-3.5 h-3.5 mr-2" />
-                {getLanguageDisplay(partnerLanguage)}
+            <div className="absolute top-3 right-3 sm:top-6 sm:right-6 z-20 flex items-center space-x-1.5 sm:space-x-2">
+              <div className="bg-google-red/20 backdrop-blur-md px-2 py-1 sm:px-4 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-bold flex items-center border border-google-red/30 text-rose-300">
+                <Languages className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1 sm:mr-2" />
+                <span className="hidden xs:inline">{getLanguageDisplay(partnerLanguage)}</span>
+                <span className="xs:hidden">{getLanguageDisplay(partnerLanguage)?.slice(0, 2)}</span>
               </div>
             </div>
 
             {/* Translation indicator */}
             {(status === 'translating' || status === 'reshaping_accent') && (
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 bg-google-blue/80 backdrop-blur-xl px-8 py-3 rounded-2xl text-sm font-bold shadow-2xl border border-white/20 flex items-center animate-bounce">
-                <Sparkles className="w-4 h-4 mr-3 text-google-yellow fill-google-yellow" />
-                {status === 'translating' ? 'Vox translating...' : 'Vox reshaping...'}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 bg-google-blue/80 backdrop-blur-xl px-4 py-2 sm:px-8 sm:py-3 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-bold shadow-2xl border border-white/20 flex items-center animate-bounce">
+                <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 mr-2 sm:mr-3 text-google-yellow fill-google-yellow" />
+                {status === 'translating' ? 'Translating...' : 'Reshaping...'}
               </div>
             )}
           </div>
@@ -350,27 +353,27 @@ const CallRoom = () => {
 
         {/* Floating Meeting Details Popover */}
         {showDetails && !partnerJoined && (
-          <div className="absolute bottom-10 left-10 z-40 bg-white/10 backdrop-blur-2xl p-6 rounded-3xl border border-white/10 shadow-2xl max-w-sm animate-in slide-in-from-left-8 duration-700">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-medium text-white/90 flex items-center">
-                <Info className="w-5 h-5 mr-2 text-google-blue" />
+          <div className="absolute bottom-4 left-3 right-3 sm:right-auto sm:bottom-10 sm:left-10 z-40 bg-white/10 backdrop-blur-2xl p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/10 shadow-2xl sm:max-w-sm animate-in slide-in-from-bottom-8 sm:slide-in-from-left-8 duration-700">
+            <div className="flex justify-between items-center mb-4 sm:mb-6">
+              <h3 className="text-base sm:text-lg font-medium text-white/90 flex items-center">
+                <Info className="w-4 h-4 sm:w-5 sm:h-5 mr-2 text-google-blue" />
                 Waiting for Partner
               </h3>
             </div>
-            <p className="text-sm text-gray-400 mb-4 leading-relaxed font-light">
+            <p className="text-xs sm:text-sm text-gray-400 mb-3 sm:mb-4 leading-relaxed font-light">
               Share this meeting link with someone to start a real-time translated conversation.
             </p>
             <div 
               onClick={copyLink}
-              className="flex items-center justify-between bg-black/30 p-3 rounded-2xl text-sm border border-white/5 group hover:border-google-blue/30 transition-all cursor-pointer"
+              className="flex items-center justify-between bg-black/30 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl text-sm border border-white/5 group hover:border-google-blue/30 transition-all cursor-pointer"
             >
-              <span className="truncate mr-4 text-google-blue/80 font-mono text-xs">
+              <span className="truncate mr-3 sm:mr-4 text-google-blue/80 font-mono text-[10px] sm:text-xs">
                 {window.location.origin}/setup/{roomId}
               </span>
               {copied ? (
-                <Check className="w-4 h-4 text-google-green" />
+                <Check className="w-4 h-4 text-google-green flex-shrink-0" />
               ) : (
-                <Copy className="w-4 h-4 text-google-blue" />
+                <Copy className="w-4 h-4 text-google-blue flex-shrink-0" />
               )}
             </div>
             {copied && (
@@ -381,8 +384,9 @@ const CallRoom = () => {
       </div>
 
       {/* Control Bar */}
-      <div className="h-28 bg-[#121212] flex items-center justify-between px-10 border-t border-white/5 z-50">
-        <div className="flex items-center space-x-6 w-1/4">
+      <div className="h-20 sm:h-28 bg-[#121212] flex items-center justify-center px-3 sm:px-6 md:px-10 border-t border-white/5 z-50">
+        {/* Time - hidden on mobile */}
+        <div className="hidden md:flex items-center space-x-6 w-1/4">
           <div className="text-lg font-light text-white/80 border-r border-white/10 pr-6">
             {time}
           </div>
@@ -391,48 +395,51 @@ const CallRoom = () => {
           </div>
         </div>
 
-        <div className="flex items-center space-x-5">
+        {/* Main Controls - centered and responsive */}
+        <div className="flex items-center justify-center space-x-2 sm:space-x-3 md:space-x-5 flex-1 md:flex-none">
           <button 
             onClick={toggleMic}
-            className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all border shadow-lg ${
+            className={`w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all border shadow-lg ${
               micOn ? 'bg-white/5 border-white/10 hover:bg-white/10' : 'bg-google-red border-transparent hover:bg-red-600'
             }`}
           >
-            {micOn ? <Mic className="w-6 h-6 text-gray-300" /> : <MicOff className="w-6 h-6 text-white" />}
+            {micOn ? <Mic className="w-5 h-5 sm:w-6 sm:h-6 text-gray-300" /> : <MicOff className="w-5 h-5 sm:w-6 sm:h-6 text-white" />}
           </button>
           
           <button 
             onClick={toggleVideo}
-            className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all border shadow-lg ${
+            className={`w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all border shadow-lg ${
               videoOn ? 'bg-white/5 border-white/10 hover:bg-white/10' : 'bg-google-red border-transparent hover:bg-red-600'
             }`}
           >
-            {videoOn ? <Video className="w-6 h-6 text-gray-300" /> : <VideoOff className="w-6 h-6 text-white" />}
+            {videoOn ? <Video className="w-5 h-5 sm:w-6 sm:h-6 text-gray-300" /> : <VideoOff className="w-5 h-5 sm:w-6 sm:h-6 text-white" />}
           </button>
 
-          <div className="w-px h-10 bg-white/5 mx-2" />
+          <div className="w-px h-8 sm:h-10 bg-white/5 mx-1 sm:mx-2 hidden sm:block" />
 
           <button 
             onClick={copyLink}
-            className="w-14 h-14 rounded-2xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all border border-white/10 group"
+            className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all border border-white/10 group"
           >
-            <Share className="w-6 h-6 text-gray-300 group-hover:text-google-blue transition-colors" />
+            <Share className="w-5 h-5 sm:w-6 sm:h-6 text-gray-300 group-hover:text-google-blue transition-colors" />
           </button>
 
-          <button className="w-14 h-14 rounded-2xl bg-white/5 hover:bg-white/10 flex items-center justify-center transition-all border border-white/10 group">
-            <MessageSquare className="w-6 h-6 text-gray-300 group-hover:text-google-blue transition-colors" />
+          {/* Chat button - hidden on very small screens */}
+          <button className="hidden xs:flex w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-white/5 hover:bg-white/10 items-center justify-center transition-all border border-white/10 group">
+            <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6 text-gray-300 group-hover:text-google-blue transition-colors" />
           </button>
           
           <button 
             onClick={confirmLeave}
-            className="h-14 px-8 rounded-2xl bg-google-red hover:bg-red-600 flex items-center justify-center transition-all shadow-2xl shadow-google-red/20"
+            className="h-11 sm:h-14 px-4 sm:px-6 md:px-8 rounded-xl sm:rounded-2xl bg-google-red hover:bg-red-600 flex items-center justify-center transition-all shadow-2xl shadow-google-red/20"
           >
-            <PhoneOff className="w-6 h-6 mr-3 rotate-[-135deg]" />
-            <span className="text-sm font-bold uppercase tracking-[0.2em]">Leave</span>
+            <PhoneOff className="w-5 h-5 sm:w-6 sm:h-6 sm:mr-3 rotate-[-135deg]" />
+            <span className="hidden sm:inline text-sm font-bold uppercase tracking-[0.2em]">Leave</span>
           </button>
         </div>
 
-        <div className="flex items-center justify-end space-x-8 w-1/4">
+        {/* Right side icons - hidden on mobile */}
+        <div className="hidden md:flex items-center justify-end space-x-8 w-1/4">
           <div className={`cursor-pointer transition-colors ${partnerJoined ? 'text-google-blue' : 'text-gray-500'}`}>
             <Users className="w-6 h-6" />
           </div>
