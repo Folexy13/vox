@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Mic, CheckCircle, ArrowRight, User, Globe, Loader2 } from 'lucide-react';
+import { Mic, CheckCircle, ArrowRight, User, Globe, Loader2, Volume2, Play, Pause } from 'lucide-react';
 import LoadingSpinner, { ProcessingIndicator } from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 
@@ -10,13 +10,19 @@ const VoiceSetup = () => {
   
   const [step, setStep] = useState(1);
   const [name, setName] = useState('');
-  const [language, setLanguage] = useState('English');
+  const [language, setLanguage] = useState('English (US)');
   const [recording, setRecording] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [captured, setCaptured] = useState(false);
   const [progress, setProgress] = useState(0);
   const [profileId, setProfileId] = useState(null);
+  const [profileAnalysis, setProfileAnalysis] = useState(null);
   const [modal, setModal] = useState({ isOpen: false, type: 'info', title: '', message: '' });
+  
+  // Voice preview state
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewPlaying, setPreviewPlaying] = useState(false);
+  const audioRef = useRef(null);
 
   const languages = [
     // English variants
@@ -74,7 +80,13 @@ const VoiceSetup = () => {
           });
           const data = await response.json();
           setProfileId(data.profile_id);
+          setProfileAnalysis(data.analysis);
           setCaptured(true);
+          
+          // Show analysis results
+          if (data.analysis) {
+            console.log('Voice Profile Analysis:', data.analysis);
+          }
         } catch (err) {
           console.error("Failed to upload voice profile", err);
           showModal('warning', 'Voice Profile', 'Could not save voice profile to server, but you can still continue with the meeting.');
@@ -107,6 +119,58 @@ const VoiceSetup = () => {
 
   const handleSkipRecording = () => {
     setCaptured(true);
+  };
+
+  // Voice preview - let users hear how they'll sound
+  const handleVoicePreview = async () => {
+    if (previewPlaying && audioRef.current) {
+      audioRef.current.pause();
+      setPreviewPlaying(false);
+      return;
+    }
+    
+    setPreviewLoading(true);
+    
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const selectedLangData = languages.find(l => l.name === language);
+      const langCode = selectedLangData?.code || 'en-US';
+      
+      // Get preview audio from backend
+      const params = new URLSearchParams({
+        text: `Hello ${name || 'there'}! This is how you will sound in the meeting. Your voice profile has been calibrated for ${language}.`,
+        language: langCode,
+        profile_id: profileId || ''
+      });
+      
+      const response = await fetch(`${backendUrl}/api/voice-preview?${params}`, {
+        method: 'POST'
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate preview');
+      }
+      
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      
+      // Play the audio
+      if (audioRef.current) {
+        audioRef.current.src = audioUrl;
+        audioRef.current.play();
+        setPreviewPlaying(true);
+        
+        audioRef.current.onended = () => {
+          setPreviewPlaying(false);
+          URL.revokeObjectURL(audioUrl);
+        };
+      }
+    } catch (err) {
+      console.error('Voice preview error:', err);
+      showModal('warning', 'Preview Unavailable', 'Could not generate voice preview. You can still continue to the meeting.');
+    } finally {
+      setPreviewLoading(false);
+    }
   };
 
   const handleContinue = () => {
@@ -245,9 +309,73 @@ const VoiceSetup = () => {
                 <p className="text-gray-400 mt-2 text-sm">
                   {profileId ? 'Your voice profile has been saved.' : 'Ready to join the meeting.'}
                 </p>
+                
+                {/* Voice Analysis Results */}
+                {profileAnalysis && (
+                  <div className="mt-6 bg-google-dark/50 rounded-xl p-4 border border-white/10 w-full max-w-sm">
+                    <h4 className="text-sm font-medium text-gray-400 mb-3 flex items-center">
+                      <Volume2 className="w-4 h-4 mr-2" />
+                      Voice Analysis
+                    </h4>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="bg-white/5 rounded-lg p-2">
+                        <span className="text-gray-500 text-xs">Pitch</span>
+                        <p className="text-white font-medium">
+                          {profileAnalysis.pitch_hz ? `${Math.round(profileAnalysis.pitch_hz)} Hz` : 'N/A'}
+                        </p>
+                      </div>
+                      <div className="bg-white/5 rounded-lg p-2">
+                        <span className="text-gray-500 text-xs">Tempo</span>
+                        <p className="text-white font-medium">
+                          {profileAnalysis.tempo ? `${profileAnalysis.tempo.toFixed(2)}x` : 'N/A'}
+                        </p>
+                      </div>
+                      <div className="bg-white/5 rounded-lg p-2 col-span-2">
+                        <span className="text-gray-500 text-xs">Duration Analyzed</span>
+                        <p className="text-white font-medium">
+                          {profileAnalysis.duration_seconds ? `${profileAnalysis.duration_seconds.toFixed(1)}s` : 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-3 text-center">
+                      Your voice characteristics will be used to match TTS output
+                    </p>
+                  </div>
+                )}
+                
+                {/* Voice Preview Button */}
+                <button
+                  onClick={handleVoicePreview}
+                  disabled={previewLoading}
+                  className="mt-6 bg-google-blue/20 hover:bg-google-blue/30 border border-google-blue/50 text-google-blue px-6 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 w-full max-w-sm"
+                >
+                  {previewLoading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Generating Preview...
+                    </>
+                  ) : previewPlaying ? (
+                    <>
+                      <Pause className="w-5 h-5" />
+                      Stop Preview
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-5 h-5" />
+                      Preview Your Voice
+                    </>
+                  )}
+                </button>
+                <p className="text-xs text-gray-500 mt-2">
+                  Hear how you'll sound in the meeting
+                </p>
+                
+                {/* Hidden audio element for playback */}
+                <audio ref={audioRef} className="hidden" />
+                
                 <button
                   onClick={handleContinue}
-                  className="mt-10 bg-white text-google-dark hover:bg-gray-200 px-12 py-4 rounded-xl font-bold transition-all shadow-2xl flex items-center"
+                  className="mt-6 bg-white text-google-dark hover:bg-gray-200 px-12 py-4 rounded-xl font-bold transition-all shadow-2xl flex items-center"
                 >
                   Enter Meeting
                   <ArrowRight className="ml-2 w-5 h-5" />

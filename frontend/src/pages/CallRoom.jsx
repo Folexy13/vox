@@ -52,9 +52,21 @@ const CallRoom = () => {
   // Redirect to setup if no user info (neither from state nor sessionStorage)
   useEffect(() => {
     if (!userName || !userLanguage) {
-      navigate(`/setup/${roomId}`);
+      navigate(`/setup/${roomId}`, { replace: true });
     }
   }, [userName, userLanguage, navigate, roomId]);
+
+  // Show loading while checking session
+  if (!userName || !userLanguage) {
+    return (
+      <div className="min-h-screen bg-google-dark flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-google-blue border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-400">Loading meeting...</p>
+        </div>
+      </div>
+    );
+  }
 
   // UI State
   const [micOn, setMicOn] = useState(true);

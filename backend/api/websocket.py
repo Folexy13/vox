@@ -85,6 +85,47 @@ async def create_voice_profile(file: UploadFile = File(...)):
         # Fallback - still create a profile ID but with default values
         return {"profile_id": f"local-{profile_id}", "analysis": None}
 
+
+@router.post("/api/voice-preview")
+async def preview_voice(
+    text: str = "Hello! This is how you will sound in the meeting.",
+    language: str = "en-US",
+    profile_id: str = None
+):
+    """
+    Generate a voice preview using TTS with the user's voice profile.
+    Lets users hear how they'll sound before joining the meeting.
+    """
+    from core.voice_synthesizer import VoiceSynthesizer
+    from fastapi.responses import Response
+    
+    try:
+        synthesizer = VoiceSynthesizer()
+        
+        # Generate speech with the user's voice profile
+        audio_bytes = await synthesizer.synthesize(
+            text=text,
+            language_code=language,
+            profile_id=profile_id
+        )
+        
+        if audio_bytes:
+            # Return as audio/wav
+            return Response(
+                content=audio_bytes,
+                media_type="audio/wav",
+                headers={
+                    "Content-Disposition": "inline; filename=preview.wav"
+                }
+            )
+        else:
+            raise HTTPException(status_code=500, detail="Failed to generate audio")
+            
+    except Exception as e:
+        print(f"Voice preview error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.websocket("/ws/{room_id}/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
     """

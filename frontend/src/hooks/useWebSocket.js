@@ -189,7 +189,7 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
     }
     
     setMessages(prev => [...prev, data]);
-  }, []);
+  }, [onTranscript]);
 
   // Connect to WebSocket
   const connect = useCallback(() => {
