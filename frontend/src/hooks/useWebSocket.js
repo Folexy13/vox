@@ -35,10 +35,21 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
     return audioContext.current;
   }, []);
 
-  // Play audio from PCM16 bytes
-  const playAudio = useCallback(async (audioData) => {
+  // Track next scheduled playback time for seamless audio
+  const nextPlayTime = useRef(0);
+  const gainNode = useRef(null);
+
+  // Play audio from PCM16 bytes with scheduled timing for smooth playback
+  const playAudio = useCallback((audioData) => {
     try {
       const ctx = initAudioContext();
+      
+      // Create gain node once and reuse
+      if (!gainNode.current) {
+        gainNode.current = ctx.createGain();
+        gainNode.current.gain.value = 1.0;
+        gainNode.current.connect(ctx.destination);
+      }
       
       // Convert ArrayBuffer to Int16Array
       const int16Data = new Int16Array(audioData);
@@ -53,39 +64,35 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
       const buffer = ctx.createBuffer(1, float32Data.length, 16000);
       buffer.getChannelData(0).set(float32Data);
       
-      // Create gain node for volume control
-      const gainNode = ctx.createGain();
-      gainNode.gain.value = 1.0;
-      gainNode.connect(ctx.destination);
+      // Calculate when to play this chunk
+      const currentTime = ctx.currentTime;
+      const bufferDuration = buffer.duration;
       
-      // Create and play source
+      // Schedule playback - if we're behind, catch up
+      if (nextPlayTime.current < currentTime) {
+        nextPlayTime.current = currentTime;
+      }
+      
+      // Create and schedule source
       const source = ctx.createBufferSource();
       source.buffer = buffer;
-      source.connect(gainNode);
-      source.start();
+      source.connect(gainNode.current);
+      source.start(nextPlayTime.current);
       
-      // Return promise that resolves when audio finishes
-      return new Promise((resolve) => {
-        source.onended = resolve;
-      });
+      // Update next play time
+      nextPlayTime.current += bufferDuration;
       
     } catch (err) {
       console.error('Audio playback error:', err);
     }
   }, [initAudioContext]);
 
-  // Process audio queue sequentially
-  const processAudioQueue = useCallback(async () => {
-    if (isPlaying.current || audioQueue.current.length === 0) return;
-    
-    isPlaying.current = true;
-    
+  // Process audio queue - now just plays immediately since we use scheduled timing
+  const processAudioQueue = useCallback(() => {
     while (audioQueue.current.length > 0) {
       const audioData = audioQueue.current.shift();
-      await playAudio(audioData);
+      playAudio(audioData);
     }
-    
-    isPlaying.current = false;
   }, [playAudio]);
 
   // Handle control messages
