@@ -48,6 +48,16 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
     try {
       const ctx = initAudioContext();
       
+      console.log(`Playing audio: ${audioData.byteLength} bytes, context state: ${ctx.state}`);
+      
+      // Resume context if suspended
+      if (ctx.state === 'suspended') {
+        console.log('AudioContext suspended, attempting to resume...');
+        ctx.resume().then(() => {
+          console.log('AudioContext resumed successfully');
+        });
+      }
+      
       // Create gain node once and reuse
       if (!gainNode.current) {
         gainNode.current = ctx.createGain();
@@ -226,6 +236,7 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
     ws.current.onmessage = async (event) => {
       if (event.data instanceof ArrayBuffer) {
         // Binary audio data - queue for playback
+        console.log(`Received audio data: ${event.data.byteLength} bytes`);
         audioQueue.current.push(event.data);
         processAudioQueue();
       } else if (typeof event.data === 'string') {
