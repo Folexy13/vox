@@ -224,18 +224,22 @@ async def handle_audio_message(
     Process incoming audio and send to partner
     """
     if room_id not in rooms or room_id not in pipelines:
+        print(f"NO ROOM/PIPELINE for {room_id}")
         return
     
     partner_id = next((uid for uid in rooms[room_id] if uid != user_id), None)
     if not partner_id:
+        print(f"NO PARTNER for {user_id} in room {room_id}")
         return
     
     pipeline = pipelines[room_id]
     
     # Process audio through pipeline
+    print(f"PROCESSING AUDIO: {len(audio_data)} bytes from {user_id} to {partner_id}")
     processed_audio, status_update = await pipeline.process_audio_chunk(
         user_id, partner_id, audio_data, vad_speaking
     )
+    print(f"PIPELINE RESULT: audio={len(processed_audio) if processed_audio else 0} bytes, status={status_update}")
     
     partner_ws = rooms[room_id].get(partner_id)
     if not partner_ws:
