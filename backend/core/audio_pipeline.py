@@ -142,7 +142,13 @@ class AudioPipeline:
             # Expecting PCM16 at 16kHz
             pcm_audio = self._ensure_pcm16(audio_data)
             
-            print(f"AUDIO RECEIVED: {len(audio_data)} bytes, PCM: {len(pcm_audio)} bytes")
+            # Calculate audio level for debugging
+            import struct
+            samples = struct.unpack(f'<{len(pcm_audio)//2}h', pcm_audio)
+            max_sample = max(abs(s) for s in samples) if samples else 0
+            avg_sample = sum(abs(s) for s in samples) / len(samples) if samples else 0
+            
+            print(f"AUDIO RECEIVED: {len(audio_data)} bytes, PCM: {len(pcm_audio)} bytes, max={max_sample}, avg={avg_sample:.0f}")
             
             if len(pcm_audio) < 1600:  # Less than 100ms of audio
                 print(f"AUDIO TOO SHORT: {len(pcm_audio)} bytes")
