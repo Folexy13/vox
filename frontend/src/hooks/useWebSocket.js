@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
  * WebSocket Hook for real-time audio communication
  * Handles connection, audio streaming, and status updates
  */
-export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', profileId = null) => {
+export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', profileId = null, onTranscript = null) => {
   const [isConnected, setIsConnected] = useState(false);
   const [partnerJoined, setPartnerJoined] = useState(false);
   const [partnerName, setPartnerName] = useState('Guest');
@@ -162,6 +162,22 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
       case 'PARTNER_HEARTBEAT':
         // Partner's heartbeat status
         setPartnerOnline(data.online);
+        break;
+        
+      case 'TRANSCRIPT':
+        // Live transcript update - emit event for CallRoom to handle
+        if (onTranscript) {
+          onTranscript({
+            isUser: data.isUser || false,
+            original: data.original,
+            translated: data.translated,
+            sourceLanguage: data.sourceLanguage,
+            targetLanguage: data.targetLanguage,
+            confidence: data.confidence,
+            emotion: data.emotion,
+            emotionPreserved: data.emotionPreserved,
+          });
+        }
         break;
         
       case 'ERROR':

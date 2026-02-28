@@ -10,6 +10,7 @@ import json
 import struct
 from google.cloud import storage
 from core.audio_pipeline import AudioPipeline
+from core.voice_profiler import VoiceProfiler
 from config import config
 
 router = APIRouter()
@@ -28,6 +29,9 @@ try:
 except Exception as e:
     print(f"Warning: Could not initialize GCS client: {e}")
     storage_client = None
+
+# Initialize voice profiler
+voice_profiler = VoiceProfiler()
 
 @router.post("/api/rooms")
 async def create_room():
@@ -52,24 +56,34 @@ async def verify_room(room_id: str):
 @router.post("/api/voice-profile")
 async def create_voice_profile(file: UploadFile = File(...)):
     """
-    Upload and store voice profile for voice matching
+    Upload and analyze voice profile for voice matching.
+    Extracts pitch, tempo, and energy characteristics from the audio sample.
     """
     content = await file.read()
     profile_id = f"profile-{uuid.uuid4()}"
     
-    if storage_client:
-        try:
-            bucket = storage_client.bucket(config.GCS_BUCKET_NAME)
-            blob = bucket.blob(f"profiles/{profile_id}.wav")
-            blob.upload_from_string(content, content_type='audio/wav')
-            print(f"Voice profile uploaded: {profile_id}")
-            return {"profile_id": profile_id}
-        except Exception as e:
-            print(f"GCS upload error: {e}")
-    
-    # Fallback for local development
-    print(f"Voice profile stored locally: {profile_id}")
-    return {"profile_id": f"local-{profile_id}"}
+    try:
+        # Analyze the voice sample to extract characteristics
+        profile_id, profile_data = await voice_profiler.create_profile_from_audio(content, profile_id)
+        
+        print(f"Voice profile created: {profile_id}")
+        print(f"  - Pitch: {profile_data.get('pitch_hz', 'N/A')}Hz")
+        print(f"  - Pitch adjustment: {profile_data.get('pitch_adjustment', 'N/A')} semitones")
+        print(f"  - Tempo: {profile_data.get('tempo', 'N/A')}x")
+        
+        return {
+            "profile_id": profile_id,
+            "analysis": {
+                "pitch_hz": profile_data.get("pitch_hz"),
+                "pitch_adjustment": profile_data.get("pitch_adjustment"),
+                "tempo": profile_data.get("tempo"),
+                "duration_seconds": profile_data.get("sample_duration_seconds")
+            }
+        }
+    except Exception as e:
+        print(f"Voice profile creation error: {e}")
+        # Fallback - still create a profile ID but with default values
+        return {"profile_id": f"local-{profile_id}", "analysis": None}
 
 @router.websocket("/ws/{room_id}/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
@@ -285,6 +299,38 @@ async def handle_audio_message(
                     "partnerLanguage": status_update.get("from_language") or user_language
                 }
                 await partner_ws.send_json(partner_status)
+                
+                # Send TRANSCRIPT message if we have transcript data
+                transcript = status_update.get("transcript")
+                translated = status_update.get("translated")
+                
+                if transcript:
+                    # Send transcript to the speaker (their own words)
+                    if user_ws:
+                        await user_ws.send_json({
+                            "type": "TRANSCRIPT",
+                            "isUser": True,
+                            "original": transcript,
+                            "translated": translated,
+                            "sourceLanguage": status_update.get("from_language"),
+                            "targetLanguage": status_update.get("to_language"),
+                            "confidence": status_update.get("confidence", 0.9),
+                            "emotion": status_update.get("emotion"),
+                            "emotionPreserved": status_update.get("emotionPreserved", True),
+                        })
+                    
+                    # Send transcript to the partner (what they're hearing)
+                    await partner_ws.send_json({
+                        "type": "TRANSCRIPT",
+                        "isUser": False,
+                        "original": transcript,
+                        "translated": translated,
+                        "sourceLanguage": status_update.get("from_language"),
+                        "targetLanguage": status_update.get("to_language"),
+                        "confidence": status_update.get("confidence", 0.9),
+                        "emotion": status_update.get("emotion"),
+                        "emotionPreserved": status_update.get("emotionPreserved", True),
+                    })
                 
         except Exception as e:
             import traceback

@@ -6,7 +6,7 @@ import { Sparkles, Mic, Languages, AlertCircle, Loader2, Volume2, WifiOff, Refre
  * Shows real-time status of Vox processing
  * Visual proof for judges that interruption handling is working
  */
-const StatusIndicator = ({ status, partnerStatus, className = '' }) => {
+const StatusIndicator = ({ status, partnerStatus, emotion, partnerEmotion, className = '' }) => {
   const [isFlashing, setIsFlashing] = useState(false);
   
   // Flash animation for interruption
@@ -170,6 +170,18 @@ const StatusIndicator = ({ status, partnerStatus, className = '' }) => {
         {config.text}
       </span>
       
+      {/* Emotion indicator */}
+      {emotion && emotion !== 'neutral' && (
+        <div className="ml-2 pl-2 border-l border-white/10 flex items-center gap-1">
+          <span className="text-sm" title={`Detected emotion: ${emotion}`}>
+            {getEmotionEmoji(emotion)}
+          </span>
+          <span className="text-xs text-gray-400 hidden sm:inline">
+            {emotion}
+          </span>
+        </div>
+      )}
+      
       {/* Partner status indicator */}
       {partnerStatus && partnerStatus !== 'idle' && (
         <div className="ml-2 pl-2 border-l border-white/10 flex items-center gap-1">
@@ -177,10 +189,32 @@ const StatusIndicator = ({ status, partnerStatus, className = '' }) => {
           <span className="text-xs text-gray-400">
             Partner {partnerStatus === 'translating' ? 'speaking' : partnerStatus}
           </span>
+          {partnerEmotion && partnerEmotion !== 'neutral' && (
+            <span className="text-sm ml-1" title={`Partner emotion: ${partnerEmotion}`}>
+              {getEmotionEmoji(partnerEmotion)}
+            </span>
+          )}
         </div>
       )}
     </div>
   );
+};
+
+// Helper function to get emoji for emotion
+const getEmotionEmoji = (emotion) => {
+  const emotions = {
+    happy: '😊',
+    excited: '🎉',
+    sad: '😢',
+    angry: '😤',
+    frustrated: '😤',
+    confused: '🤔',
+    neutral: '😐',
+    calm: '😌',
+    surprised: '😲',
+    worried: '😟',
+  };
+  return emotions[emotion?.toLowerCase()] || '💬';
 };
 
 export default StatusIndicator;

@@ -11,6 +11,7 @@ import { useAudioCapture } from '../hooks/useAudioCapture';
 import StatusIndicator from '../components/StatusIndicator';
 import Modal from '../components/Modal';
 import LoadingSpinner from '../components/LoadingSpinner';
+import TranscriptPanel from '../components/TranscriptPanel';
 
 const CallRoom = () => {
   const { roomId } = useParams();
@@ -65,33 +66,70 @@ const CallRoom = () => {
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
   const [currentLanguage, setCurrentLanguage] = useState(userLanguage);
   
+  // Transcript state for live transcript panel
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [transcripts, setTranscripts] = useState([]);
+  const transcriptIdRef = useRef(0);
+  
+  // Add transcript entry
+  const addTranscript = useCallback((entry) => {
+    transcriptIdRef.current += 1;
+    setTranscripts(prev => [...prev, {
+      id: transcriptIdRef.current,
+      timestamp: Date.now(),
+      ...entry
+    }].slice(-100)); // Keep last 100 entries
+  }, []);
+  
   // Video refs
   const userVideoRef = useRef(null);
   const partnerVideoRef = useRef(null);
   const localStreamRef = useRef(null);
 
-  // Available languages with codes
+  // Available languages with codes - including Nigerian languages as differentiators
   const languages = [
-    { name: 'English', code: 'en-US', flag: '🇺🇸' },
+    // English variants
+    { name: 'English (US)', code: 'en-US', flag: '🇺🇸' },
+    { name: 'English (UK)', code: 'en-GB', flag: '🇬🇧' },
+    { name: 'English (Nigerian)', code: 'en-NG', flag: '🇳🇬' },
+    // Nigerian languages - STRATEGIC DIFFERENTIATORS
+    { name: 'Yoruba', code: 'yo-NG', flag: '🇳🇬', highlight: true },
+    { name: 'Igbo', code: 'ig-NG', flag: '🇳🇬', highlight: true },
+    { name: 'Hausa', code: 'ha-NG', flag: '🇳🇬', highlight: true },
+    // European languages
     { name: 'French', code: 'fr-FR', flag: '🇫🇷' },
     { name: 'Spanish', code: 'es-ES', flag: '🇪🇸' },
+    { name: 'Portuguese', code: 'pt-BR', flag: '🇧🇷' },
+    { name: 'German', code: 'de-DE', flag: '🇩🇪' },
+    // Asian languages
     { name: 'Chinese', code: 'zh-CN', flag: '🇨🇳' },
     { name: 'Japanese', code: 'ja-JP', flag: '🇯🇵' },
     { name: 'Korean', code: 'ko-KR', flag: '🇰🇷' },
+    // Middle Eastern
+    { name: 'Arabic', code: 'ar-SA', flag: '🇸🇦' },
   ];
 
   // Map language name to code
   const languageCodeMap = {
-    'English': 'en-US',
+    'English (US)': 'en-US',
+    'English (UK)': 'en-GB',
+    'English (Nigerian)': 'en-NG',
+    'English': 'en-US',  // Fallback for old data
+    'Yoruba': 'yo-NG',
+    'Igbo': 'ig-NG',
+    'Hausa': 'ha-NG',
     'French': 'fr-FR',
     'Spanish': 'es-ES',
+    'Portuguese': 'pt-BR',
+    'German': 'de-DE',
     'Chinese': 'zh-CN',
     'Japanese': 'ja-JP',
     'Korean': 'ko-KR',
+    'Arabic': 'ar-SA',
   };
-  const userLanguageCode = languageCodeMap[currentLanguage] || 'en-US';
+  const userLanguageCode = languageCodeMap[currentLanguage] || currentLanguage || 'en-US';
 
-  // WebSocket connection
+  // WebSocket connection with transcript callback
   const { 
     isConnected, 
     partnerJoined, 
@@ -103,7 +141,7 @@ const CallRoom = () => {
     sendMuteState,
     updateLanguage,
     disconnect
-  } = useWebSocket(roomId, userId, userName, userLanguageCode, profileId);
+  } = useWebSocket(roomId, userId, userName, userLanguageCode, profileId, addTranscript);
 
   // Handle language change
   const handleLanguageChange = useCallback((lang) => {
@@ -550,6 +588,15 @@ const CallRoom = () => {
           </div>
         </div>
       </div>
+      
+      {/* Live Transcript Panel */}
+      <TranscriptPanel
+        transcripts={transcripts}
+        isOpen={showTranscript}
+        onToggle={() => setShowTranscript(!showTranscript)}
+        userName={userName}
+        partnerName={partnerName}
+      />
     </div>
   );
 };

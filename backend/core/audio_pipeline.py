@@ -9,6 +9,7 @@ from .interruption_handler import InterruptionHandler
 from .language_detector import LanguageDetector
 from .translator import Translator
 from .voice_synthesizer import VoiceSynthesizer
+from .emotion_detector import EmotionDetector
 
 class AudioPipeline:
     def __init__(self, room_id: str):
@@ -17,6 +18,7 @@ class AudioPipeline:
         self.language_detector = LanguageDetector()
         self.translator = Translator()
         self.voice_synthesizer = VoiceSynthesizer()
+        self.emotion_detector = EmotionDetector()
         
         # User state tracking
         # CHOSEN language: what the user wants to HEAR (set from JOIN message)
@@ -195,13 +197,22 @@ class AudioPipeline:
                 partner_language
             )
             
+            # Step 2.5: Detect emotion from transcript
+            emotion_data = await self.emotion_detector.detect_emotion(transcript)
+            detected_emotion = emotion_data.get("emotion", "neutral")
+            emotion_emoji = emotion_data.get("emoji", "💬")
+            
+            print(f"EMOTION DETECTED: {detected_emotion} {emotion_emoji}")
+            
             if same_language:
                 # Same language - accent clarification only
                 status_update = {
                     "type": "STATUS", 
                     "status": "reshaping_accent",
                     "from_language": detected_language,
-                    "to_language": partner_language
+                    "to_language": partner_language,
+                    "emotion": detected_emotion,
+                    "emotionEmoji": emotion_emoji,
                 }
                 
                 # Clarify accent if different variants
@@ -214,19 +225,23 @@ class AudioPipeline:
                 else:
                     processed_text = transcript
             else:
-                # Different languages - full translation
+                # Different languages - full translation with emotion preservation
                 status_update = {
                     "type": "STATUS", 
                     "status": "translating",
                     "from_language": detected_language,
-                    "to_language": partner_language
+                    "to_language": partner_language,
+                    "emotion": detected_emotion,
+                    "emotionEmoji": emotion_emoji,
                 }
                 
-                processed_text = await self.translator.translate(
+                # Use emotion-aware translation
+                processed_text, emotion_data = await self.emotion_detector.detect_and_translate_with_emotion(
                     transcript,
                     detected_language,
                     partner_language
                 )
+                status_update["emotionPreserved"] = emotion_data.get("emotionPreserved", True)
             
             if not processed_text:
                 print(f"NO PROCESSED TEXT - skipping synthesis")

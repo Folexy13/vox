@@ -16,27 +16,62 @@ class VoiceSynthesizer:
         # Using Journey/Wavenet voices for most natural sound
         # Format: language_code -> (voice_name, actual_language_code_for_tts)
         self.voice_mapping = {
-            # English
+            # English variants
             "en-US": ("en-US-Journey-D", "en-US"),
             "en-GB": ("en-GB-Journey-D", "en-GB"),
+            "en-NG": ("en-GB-Journey-D", "en-GB"),  # Nigerian English uses British voice
             "en-us": ("en-US-Journey-D", "en-US"),
             "en-gb": ("en-GB-Journey-D", "en-GB"),
+            "en-ng": ("en-GB-Journey-D", "en-GB"),
+            
+            # Nigerian languages - use English TTS with translated text
+            # These are strategic differentiators for the hackathon
+            "yo-NG": ("en-GB-Journey-D", "en-GB"),  # Yoruba -> English TTS
+            "ig-NG": ("en-GB-Journey-D", "en-GB"),  # Igbo -> English TTS
+            "ha-NG": ("en-GB-Journey-D", "en-GB"),  # Hausa -> English TTS
+            "yo-ng": ("en-GB-Journey-D", "en-GB"),
+            "ig-ng": ("en-GB-Journey-D", "en-GB"),
+            "ha-ng": ("en-GB-Journey-D", "en-GB"),
+            
             # French
             "fr-FR": ("fr-FR-Journey-D", "fr-FR"),
             "fr-fr": ("fr-FR-Journey-D", "fr-FR"),
+            
             # Spanish
             "es-ES": ("es-ES-Journey-D", "es-ES"),
             "es-es": ("es-ES-Journey-D", "es-ES"),
+            
+            # Portuguese
+            "pt-BR": ("pt-BR-Wavenet-B", "pt-BR"),
+            "pt-br": ("pt-BR-Wavenet-B", "pt-BR"),
+            
+            # German
+            "de-DE": ("de-DE-Journey-D", "de-DE"),
+            "de-de": ("de-DE-Journey-D", "de-DE"),
+            
             # Chinese (Mandarin)
             "zh-CN": ("cmn-CN-Wavenet-A", "cmn-CN"),
             "cmn-hans-cn": ("cmn-CN-Wavenet-A", "cmn-CN"),
             "cmn-CN": ("cmn-CN-Wavenet-A", "cmn-CN"),
+            
             # Japanese
             "ja-JP": ("ja-JP-Wavenet-D", "ja-JP"),
             "ja-jp": ("ja-JP-Wavenet-D", "ja-JP"),
+            
             # Korean
             "ko-KR": ("ko-KR-Wavenet-D", "ko-KR"),
             "ko-kr": ("ko-KR-Wavenet-D", "ko-KR"),
+            
+            # Arabic
+            "ar-SA": ("ar-XA-Wavenet-B", "ar-XA"),
+            "ar-sa": ("ar-XA-Wavenet-B", "ar-XA"),
+        }
+        
+        # Languages that need translation to English for TTS
+        # (because direct TTS is not available)
+        self.needs_translation_for_tts = {
+            "yo-NG", "ig-NG", "ha-NG",
+            "yo-ng", "ig-ng", "ha-ng",
         }
         
         # Default voice profile settings

@@ -10,15 +10,53 @@ class LanguageDetector:
     def __init__(self):
         self.client = speech.SpeechClient()
         # Supported languages with their codes
-        # Only languages with good TTS support
+        # Including Nigerian languages as strategic differentiators
         self.supported_languages = [
-            "en-US", "en-GB",  # English variants
+            # English variants
+            "en-US", "en-GB", "en-NG",  # Nigerian English
+            # Nigerian languages (DIFFERENTIATORS - few tools support these)
+            "yo-NG",  # Yoruba
+            "ig-NG",  # Igbo  
+            "ha-NG",  # Hausa
+            # European languages
             "fr-FR",  # French
             "es-ES",  # Spanish
+            "pt-BR",  # Portuguese (Brazilian)
+            "de-DE",  # German
+            # Asian languages
             "zh-CN",  # Mandarin Chinese
             "ja-JP",  # Japanese
             "ko-KR",  # Korean
+            # Middle Eastern
+            "ar-SA",  # Arabic
         ]
+        
+        # Language display names for UI
+        self.language_names = {
+            "en-US": "English (US)",
+            "en-GB": "English (UK)",
+            "en-NG": "English (Nigerian)",
+            "yo-NG": "Yoruba",
+            "ig-NG": "Igbo",
+            "ha-NG": "Hausa",
+            "fr-FR": "French",
+            "es-ES": "Spanish",
+            "pt-BR": "Portuguese",
+            "de-DE": "German",
+            "zh-CN": "Chinese (Mandarin)",
+            "ja-JP": "Japanese",
+            "ko-KR": "Korean",
+            "ar-SA": "Arabic",
+        }
+        
+        # Fallback TTS language codes (for languages without direct TTS support)
+        # Nigerian languages will use English TTS with Gemini translation
+        self.tts_fallback = {
+            "yo-NG": "en-NG",  # Yoruba -> Nigerian English TTS
+            "ig-NG": "en-NG",  # Igbo -> Nigerian English TTS
+            "ha-NG": "en-NG",  # Hausa -> Nigerian English TTS
+            "en-NG": "en-GB",  # Nigerian English -> British English TTS
+        }
         
     async def detect_language(self, audio_data: bytes, sample_rate: int = 16000) -> dict:
         """

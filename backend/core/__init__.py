@@ -6,6 +6,8 @@ from .interruption_handler import InterruptionHandler, CallState
 from .language_detector import LanguageDetector
 from .translator import Translator
 from .voice_synthesizer import VoiceSynthesizer
+from .voice_profiler import VoiceProfiler
+from .emotion_detector import EmotionDetector
 from .session_manager import SessionManager
 
 __all__ = [
@@ -15,5 +17,7 @@ __all__ = [
     'LanguageDetector',
     'Translator',
     'VoiceSynthesizer',
+    'VoiceProfiler',
+    'EmotionDetector',
     'SessionManager',
 ]

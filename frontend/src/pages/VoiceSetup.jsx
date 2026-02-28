@@ -19,12 +19,25 @@ const VoiceSetup = () => {
   const [modal, setModal] = useState({ isOpen: false, type: 'info', title: '', message: '' });
 
   const languages = [
-    { name: 'English', code: 'en-US', test: "The quick brown fox jumps over the lazy dog." },
+    // English variants
+    { name: 'English (US)', code: 'en-US', test: "The quick brown fox jumps over the lazy dog." },
+    { name: 'English (UK)', code: 'en-GB', test: "The quick brown fox jumps over the lazy dog." },
+    { name: 'English (Nigerian)', code: 'en-NG', test: "The quick brown fox jumps over the lazy dog." },
+    // Nigerian languages - STRATEGIC DIFFERENTIATORS
+    { name: 'Yoruba', code: 'yo-NG', test: "Ẹ kú àárọ̀, báwo ni ọjọ́ yín ṣe rí?", highlight: true },
+    { name: 'Igbo', code: 'ig-NG', test: "Ụtụtụ ọma, kedu ka ị mere?", highlight: true },
+    { name: 'Hausa', code: 'ha-NG', test: "Ina kwana, yaya aiki?", highlight: true },
+    // European languages
     { name: 'French', code: 'fr-FR', test: "Le renard brun rapide saute par-dessus le chien paresseux." },
     { name: 'Spanish', code: 'es-ES', test: "El veloz zorro marrón salta sobre el perro perezoso." },
+    { name: 'Portuguese', code: 'pt-BR', test: "A rápida raposa marrom salta sobre o cão preguiçoso." },
+    { name: 'German', code: 'de-DE', test: "Der schnelle braune Fuchs springt über den faulen Hund." },
+    // Asian languages
     { name: 'Chinese', code: 'zh-CN', test: "快速的棕色狐狸跳过懒狗。" },
     { name: 'Japanese', code: 'ja-JP', test: "素早い茶色のキツネが怠惰な犬を飛び越える。" },
     { name: 'Korean', code: 'ko-KR', test: "빠른 갈색 여우가 게으른 개를 뛰어넘습니다." },
+    // Middle Eastern
+    { name: 'Arabic', code: 'ar-SA', test: "الثعلب البني السريع يقفز فوق الكلب الكسول." },
   ];
 
   const selectedLang = languages.find(l => l.name === language);
