@@ -67,24 +67,28 @@ const TranscriptPanel = ({
   };
   
   // Get the text to display based on who is speaking
-  // For user's own messages: show original (their language)
-  // For partner's messages: show translated (in user's language)
+  // IMPORTANT: Each user sees transcripts in THEIR language
+  // - User's own messages: show original (what they said in their language)
+  // - Partner's messages: show translated version (translated TO user's language)
   const getDisplayText = (entry) => {
     if (entry.isUser) {
-      // User's own message - show original
+      // User's own message - show what they said (original)
+      // The "translated" field contains what the partner will hear
       return {
         primary: entry.original,
-        secondary: entry.translated !== entry.original ? entry.translated : null,
+        secondary: entry.translated && entry.translated !== entry.original ? entry.translated : null,
         primaryLabel: 'You said',
-        secondaryLabel: `Translated to ${entry.targetLanguage || 'partner\'s language'}`,
+        secondaryLabel: `Partner hears (${entry.targetLanguage || 'translated'})`,
       };
     } else {
-      // Partner's message - show translated (in user's language)
+      // Partner's message - show the TRANSLATED version (in user's language)
+      // The "translated" field is what was translated TO the user's language
+      // The "original" field is what the partner said in their language
       return {
         primary: entry.translated || entry.original,
-        secondary: entry.translated !== entry.original ? entry.original : null,
-        primaryLabel: `${partnerName} said (translated)`,
-        secondaryLabel: `Original (${entry.sourceLanguage || 'unknown'})`,
+        secondary: entry.original && entry.translated !== entry.original ? entry.original : null,
+        primaryLabel: `${partnerName} said`,
+        secondaryLabel: `Original (${entry.sourceLanguage || 'their language'})`,
       };
     }
   };
