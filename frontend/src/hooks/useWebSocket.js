@@ -430,7 +430,6 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
     partnerName,
     partnerLanguage,
     partnerOnline,
-    messages, 
     status,
     partnerStatus,
     listeningToName,
