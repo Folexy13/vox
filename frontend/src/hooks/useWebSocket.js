@@ -9,7 +9,6 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
   const [partnerJoined, setPartnerJoined] = useState(false);
   const [partnerName, setPartnerName] = useState('Guest');
   const [partnerLanguage, setPartnerLanguage] = useState('Detecting...');
-  const [messages, setMessages] = useState([]);
   const [status, setStatus] = useState('connecting');
   const [partnerStatus, setPartnerStatus] = useState('idle');
   const [listeningToName, setListeningToName] = useState(null);
@@ -25,6 +24,15 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
   const shouldReconnect = useRef(true);
   const heartbeatInterval = useRef(null);
   const lastPongTime = useRef(Date.now());
+
+  // Stable refs for values used in callbacks to avoid dependency changes
+  const usernameRef = useRef(username);
+  const userLanguageRef = useRef(userLanguage);
+  const onTranscriptRef = useRef(onTranscript);
+
+  useEffect(() => { usernameRef.current = username; }, [username]);
+  useEffect(() => { userLanguageRef.current = userLanguage; }, [userLanguage]);
+  useEffect(() => { onTranscriptRef.current = onTranscript; }, [onTranscript]);
 
   // Initialize audio context for playback
   const initAudioContext = useCallback(() => {
@@ -137,10 +145,7 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
         // Our own status update
         setStatus(data.status);
         if (data.listeningToName) {
-          setListeningToName(data.listeningToName === username ? 'You' : data.listeningToName);
-        } else if (data.status === 'listening' && !data.listeningTo) {
-          // If status is listening but no specific user mentioned, clear listening name after a delay
-          // This allows for "Vox is listening" state
+          setListeningToName(data.listeningToName === usernameRef.current ? 'You' : data.listeningToName);
         }
         break;
         
@@ -173,8 +178,8 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
         
       case 'TRANSCRIPT':
         // Live transcript update - emit event for CallRoom to handle
-        if (onTranscript) {
-          onTranscript({
+        if (onTranscriptRef.current) {
+          onTranscriptRef.current({
             isUser: data.isUser || false,
             original: data.original,
             translated: data.translated,
@@ -194,9 +199,7 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
       default:
         console.log('Unknown message type:', data.type);
     }
-    
-    setMessages(prev => [...prev, data]);
-  }, [onTranscript]);
+  }, []);
 
   // Connect to WebSocket
   const connect = useCallback(() => {
@@ -217,7 +220,7 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
     const backendHost = backendUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
     const wsUrl = `${wsProtocol}//${backendHost}/ws/${roomId}/${userId}`;
     
-    console.log(`Connecting to ${wsUrl} as ${username}`);
+    console.log(`Connecting to ${wsUrl} as ${usernameRef.current}`);
     setStatus('connecting');
     
     ws.current = new WebSocket(wsUrl);
@@ -233,8 +236,8 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
       // Send JOIN message with user info
       ws.current.send(JSON.stringify({
         type: 'JOIN',
-        username: username,
-        language: userLanguage,
+        username: usernameRef.current,
+        language: userLanguageRef.current,
         profileId: profileId
       }));
       
@@ -299,7 +302,7 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
         setStatus('disconnected');
       }
     };
-  }, [roomId, userId, username, userLanguage, profileId, processAudioQueue, handleControlMessage]);
+  }, [roomId, userId, profileId, processAudioQueue, handleControlMessage]);
 
   // Disconnect from WebSocket
   const disconnect = useCallback(() => {
@@ -316,7 +319,7 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
       ws.current.send(JSON.stringify({
         type: 'LEAVE',
-        username: username
+        username: usernameRef.current
       }));
     }
     
@@ -335,12 +338,13 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
     // Clear audio queue
     audioQueue.current = [];
     isPlaying.current = false;
+    nextPlayTime.current = 0;
     
     // Reset state
     setIsConnected(false);
     setPartnerJoined(false);
     setStatus('disconnected');
-  }, [username]);
+  }, []);
 
   // Send audio chunk with VAD state
   const sendAudio = useCallback((audioBuffer, isSpeaking = true) => {

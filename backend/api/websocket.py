@@ -409,6 +409,13 @@ async def cleanup_user(room_id: str, user_id: str):
     if room_id in rooms and user_id in rooms[room_id]:
         del rooms[room_id][user_id]
         
+        # Clear audio buffer for this user in the pipeline
+        if room_id in pipelines:
+            pipeline = pipelines[room_id]
+            if user_id in pipeline.audio_buffers:
+                pipeline.audio_buffers[user_id] = b""
+                pipeline.silence_counters[user_id] = 0
+        
         if user_id in active_meetings.get(room_id, {}).get("users", {}):
             del active_meetings[room_id]["users"][user_id]
             
