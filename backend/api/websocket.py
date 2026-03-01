@@ -177,9 +177,10 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
             "profile_id": profile_id
         }
         
-        # Set user's language and profile in pipeline
+        # Set user's language, profile, and name in pipeline
         pipeline = pipelines[room_id]
         pipeline.set_user_language(user_id, user_language)
+        pipeline.set_speaker_name(user_id, username)  # For "listening to" display
         if profile_id:
             pipeline.set_user_profile(user_id, profile_id)
         

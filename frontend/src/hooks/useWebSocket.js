@@ -12,6 +12,7 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
   const [messages, setMessages] = useState([]);
   const [status, setStatus] = useState('connecting');
   const [partnerStatus, setPartnerStatus] = useState('idle');
+  const [listeningToName, setListeningToName] = useState(null);
   
   const [partnerOnline, setPartnerOnline] = useState(true);
   
@@ -135,6 +136,12 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
       case 'STATUS':
         // Our own status update
         setStatus(data.status);
+        if (data.listeningToName) {
+          setListeningToName(data.listeningToName === username ? 'You' : data.listeningToName);
+        } else if (data.status === 'listening' && !data.listeningTo) {
+          // If status is listening but no specific user mentioned, clear listening name after a delay
+          // This allows for "Vox is listening" state
+        }
         break;
         
       case 'PARTNER_STATUS':
@@ -422,6 +429,7 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
     messages, 
     status,
     partnerStatus,
+    listeningToName,
     sendAudio,
     sendAudioWithVAD,
     updateLanguage,

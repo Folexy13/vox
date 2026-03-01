@@ -34,10 +34,14 @@ class AudioPipeline:
         
         # Audio accumulation settings
         # At 16kHz, 2 bytes per sample: 32000 bytes = 1 second of audio
-        # Balance between latency and recognition accuracy
-        self.MIN_AUDIO_BYTES = 32000  # Minimum 1 second before processing
-        self.MAX_AUDIO_BYTES = 160000  # Maximum 5 seconds for longer sentences
-        self.SILENCE_THRESHOLD = 4    # Process after 4 silence chunks (~0.5 seconds of silence)
+        # For real-time conversation, we need faster processing
+        self.MIN_AUDIO_BYTES = 16000  # Minimum 0.5 second before processing
+        self.MAX_AUDIO_BYTES = 64000  # Maximum 2 seconds - faster response
+        self.SILENCE_THRESHOLD = 3    # Process after 3 silence chunks (~375ms of silence)
+        
+        # Track who is currently speaking for "listening to" status
+        self.current_speaker: Optional[str] = None
+        self.speaker_names: Dict[str, str] = {}  # user_id -> display name
         
     def set_user_profile(self, user_id: str, profile_id: str):
         """Set voice profile for a user"""
@@ -46,6 +50,14 @@ class AudioPipeline:
     def set_user_language(self, user_id: str, language: str):
         """Set preferred language for a user"""
         self.user_languages[user_id] = language
+    
+    def set_speaker_name(self, user_id: str, name: str):
+        """Set display name for a user"""
+        self.speaker_names[user_id] = name
+    
+    def get_speaker_name(self, user_id: str) -> str:
+        """Get display name for a user"""
+        return self.speaker_names.get(user_id, "Unknown")
         
     async def process_audio_chunk(
         self, 
@@ -104,7 +116,16 @@ class AudioPipeline:
             print(f"END OF SPEECH for {user_id}: {buffer_size} bytes after {self.silence_counters[user_id]} silence chunks")
         
         if not should_process:
-            # Keep accumulating
+            # Keep accumulating - but update who we're listening to
+            speaker_name = self.speaker_names.get(user_id, "Unknown")
+            if vad_speaking and self.current_speaker != user_id:
+                self.current_speaker = user_id
+                return None, {
+                    "type": "STATUS", 
+                    "status": "listening",
+                    "listeningTo": user_id,
+                    "listeningToName": speaker_name
+                }
             return None, {"type": "STATUS", "status": "listening"}
         
         # Get accumulated audio and clear buffer

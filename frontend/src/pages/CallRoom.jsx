@@ -149,6 +149,7 @@ const CallRoom = () => {
     partnerLanguage,
     status,
     partnerStatus,
+    listeningToName,
     sendAudio,
     sendMuteState,
     updateLanguage,
@@ -356,6 +357,7 @@ const CallRoom = () => {
         <StatusIndicator 
           status={status} 
           partnerStatus={partnerStatus}
+          listeningToName={listeningToName}
         />
       </div>
 

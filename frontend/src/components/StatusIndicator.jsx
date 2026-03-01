@@ -6,7 +6,7 @@ import { Sparkles, Mic, Languages, AlertCircle, Loader2, Volume2, WifiOff, Refre
  * Shows real-time status of Vox processing
  * Visual proof for judges that interruption handling is working
  */
-const StatusIndicator = ({ status, partnerStatus, emotion, partnerEmotion, className = '' }) => {
+const StatusIndicator = ({ status, partnerStatus, emotion, partnerEmotion, listeningToName, className = '' }) => {
   const [isFlashing, setIsFlashing] = useState(false);
   
   // Flash animation for interruption
@@ -33,7 +33,7 @@ const StatusIndicator = ({ status, partnerStatus, emotion, partnerEmotion, class
       case 'listening':
         return {
           icon: Mic,
-          text: 'Listening',
+          text: listeningToName ? `Vox is listening to ${listeningToName}` : 'Vox is listening',
           color: 'text-google-blue',
           bgColor: 'bg-google-blue/20',
           borderColor: 'border-google-blue/30',

@@ -127,7 +127,15 @@ export const useAudioCapture = (onAudioChunk, enabled = true) => {
       // Connect nodes
       source.connect(analyser.current);
       source.connect(processor.current);
-      processor.current.connect(audioContext.current.destination);
+      // DON'T connect processor to destination - we don't want to hear our own voice!
+      // processor.current.connect(audioContext.current.destination);
+      
+      // We need to connect something to the destination to keep the context running in some browsers
+      // but we'll use a GainNode with 0 volume
+      const silentGain = audioContext.current.createGain();
+      silentGain.gain.value = 0;
+      processor.current.connect(silentGain);
+      silentGain.connect(audioContext.current.destination);
       
       setIsCapturing(true);
       console.log('Audio capture started');
