@@ -42,6 +42,7 @@ class AudioPipeline:
         # Track who is currently speaking for "listening to" status
         self.current_speaker: Optional[str] = None
         self.speaker_names: Dict[str, str] = {}  # user_id -> display name
+        self.last_vad_speaking: Dict[str, bool] = {}  # user_id -> last VAD state
         
     def set_user_profile(self, user_id: str, profile_id: str):
         """Set voice profile for a user"""
@@ -106,14 +107,23 @@ class AudioPipeline:
         buffer_size = len(self.audio_buffers[user_id])
         should_process = False
         
+        # Check for transition from speaking to not speaking (End of utterance)
+        was_speaking = self.last_vad_speaking.get(user_id, False)
+        speech_ended = was_speaking and not vad_speaking
+        self.last_vad_speaking[user_id] = vad_speaking
+        
         if buffer_size >= self.MAX_AUDIO_BYTES:
             # Buffer is full, must process
             should_process = True
             print(f"BUFFER FULL for {user_id}: {buffer_size} bytes")
-        elif buffer_size >= self.MIN_AUDIO_BYTES and self.silence_counters[user_id] >= self.SILENCE_THRESHOLD:
-            # Have enough audio and detected end of speech
+        elif speech_ended and buffer_size >= self.MIN_AUDIO_BYTES:
+            # User stopped speaking, process immediately if we have enough audio
             should_process = True
-            print(f"END OF SPEECH for {user_id}: {buffer_size} bytes after {self.silence_counters[user_id]} silence chunks")
+            print(f"SPEECH ENDED for {user_id}: {buffer_size} bytes - processing immediately")
+        elif buffer_size >= self.MIN_AUDIO_BYTES and self.silence_counters[user_id] >= self.SILENCE_THRESHOLD:
+            # Have enough audio and detected silence threshold
+            should_process = True
+            print(f"SILENCE THRESHOLD for {user_id}: {buffer_size} bytes after {self.silence_counters[user_id]} chunks")
         
         if not should_process:
             # Keep accumulating - but update who we're listening to
