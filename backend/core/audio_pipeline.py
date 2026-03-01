@@ -35,9 +35,9 @@ class AudioPipeline:
         # Audio accumulation settings
         # At 16kHz, 2 bytes per sample: 32000 bytes = 1 second of audio
         # Balance between latency and recognition accuracy
-        self.MIN_AUDIO_BYTES = 16000  # Minimum 0.5 second before processing
-        self.MAX_AUDIO_BYTES = 64000  # Maximum 2 seconds
-        self.SILENCE_THRESHOLD = 2    # Process after 2 silence chunks
+        self.MIN_AUDIO_BYTES = 32000  # Minimum 1 second before processing
+        self.MAX_AUDIO_BYTES = 160000  # Maximum 5 seconds for longer sentences
+        self.SILENCE_THRESHOLD = 4    # Process after 4 silence chunks (~0.5 seconds of silence)
         
     def set_user_profile(self, user_id: str, profile_id: str):
         """Set voice profile for a user"""
@@ -177,9 +177,9 @@ class AudioPipeline:
                 print(f"NO TRANSCRIPT DETECTED - skipping (confidence={confidence})")
                 return None, {"type": "STATUS", "status": "listening"}
             
-            # Accept any transcript with confidence > 0 (Google already filtered low confidence)
-            if confidence < 0.01:
-                print(f"VERY LOW CONFIDENCE ({confidence}) - skipping")
+            # Require minimum confidence to avoid processing noise
+            if confidence < 0.3:
+                print(f"LOW CONFIDENCE ({confidence}) - skipping (likely noise)")
                 return None, {"type": "STATUS", "status": "listening"}
             
             # Update user's DETECTED language (what they are speaking)
