@@ -303,57 +303,57 @@ async def handle_audio_message(
 ):
     """
     Process incoming audio and send to partner
+    Also shows transcript to speaker even without partner
     """
     if room_id not in rooms or room_id not in pipelines:
         print(f"NO ROOM/PIPELINE for {room_id}")
         return
     
     partner_id = next((uid for uid in rooms[room_id] if uid != user_id), None)
-    if not partner_id:
-        print(f"NO PARTNER for {user_id} in room {room_id}")
-        return
+    has_partner = partner_id is not None
     
     pipeline = pipelines[room_id]
+    user_ws = rooms[room_id].get(user_id)
     
-    # Process audio through pipeline
-    print(f"PROCESSING AUDIO: {len(audio_data)} bytes from {user_id} to {partner_id}")
+    # Process audio through pipeline (even without partner for transcript)
+    # Use a dummy partner_id if no partner, just for processing
+    target_partner = partner_id or "no_partner"
+    print(f"PROCESSING AUDIO: {len(audio_data)} bytes from {user_id} to {target_partner}")
     processed_audio, status_update = await pipeline.process_audio_chunk(
-        user_id, partner_id, audio_data, vad_speaking
+        user_id, target_partner, audio_data, vad_speaking
     )
     print(f"PIPELINE RESULT: audio={len(processed_audio) if processed_audio else 0} bytes, status={status_update}")
     
-    partner_ws = rooms[room_id].get(partner_id)
-    if not partner_ws:
-        return
+    partner_ws = rooms[room_id].get(partner_id) if partner_id else None
     
     # Send status update to both users
     if status_update:
         try:
-            # Send to speaker (user)
-            user_ws = rooms[room_id].get(user_id)
+            # Send to speaker (user) - ALWAYS send to speaker
             if user_ws:
                 await user_ws.send_json(status_update)
             
-            # Send relevant status to partner
+            # Send relevant status to partner (only if partner exists)
             if status_update.get("type") == "STATUS":
                 # Get user's language from meeting data
                 user_language = None
                 if room_id in active_meetings and user_id in active_meetings[room_id].get("users", {}):
                     user_language = active_meetings[room_id]["users"][user_id].get("language")
                 
-                partner_status = {
-                    "type": "PARTNER_STATUS",
-                    "status": status_update.get("status"),
-                    "partnerLanguage": status_update.get("from_language") or user_language
-                }
-                await partner_ws.send_json(partner_status)
+                if partner_ws:
+                    partner_status = {
+                        "type": "PARTNER_STATUS",
+                        "status": status_update.get("status"),
+                        "partnerLanguage": status_update.get("from_language") or user_language
+                    }
+                    await partner_ws.send_json(partner_status)
                 
                 # Send TRANSCRIPT message if we have transcript data
                 transcript = status_update.get("transcript")
                 translated = status_update.get("translated")
                 
                 if transcript:
-                    # Send transcript to the speaker (their own words)
+                    # ALWAYS send transcript to the speaker (their own words)
                     if user_ws:
                         await user_ws.send_json({
                             "type": "TRANSCRIPT",
@@ -366,27 +366,30 @@ async def handle_audio_message(
                             "emotion": status_update.get("emotion"),
                             "emotionPreserved": status_update.get("emotionPreserved", True),
                         })
+                        print(f"TRANSCRIPT sent to speaker: '{transcript[:50]}...'")
                     
-                    # Send transcript to the partner (what they're hearing)
-                    await partner_ws.send_json({
-                        "type": "TRANSCRIPT",
-                        "isUser": False,
-                        "original": transcript,
-                        "translated": translated,
-                        "sourceLanguage": status_update.get("from_language"),
-                        "targetLanguage": status_update.get("to_language"),
-                        "confidence": status_update.get("confidence", 0.9),
-                        "emotion": status_update.get("emotion"),
-                        "emotionPreserved": status_update.get("emotionPreserved", True),
-                    })
+                    # Send transcript to the partner (only if partner exists)
+                    if partner_ws:
+                        await partner_ws.send_json({
+                            "type": "TRANSCRIPT",
+                            "isUser": False,
+                            "original": transcript,
+                            "translated": translated,
+                            "sourceLanguage": status_update.get("from_language"),
+                            "targetLanguage": status_update.get("to_language"),
+                            "confidence": status_update.get("confidence", 0.9),
+                            "emotion": status_update.get("emotion"),
+                            "emotionPreserved": status_update.get("emotionPreserved", True),
+                        })
+                        print(f"TRANSCRIPT sent to partner: '{translated[:50] if translated else transcript[:50]}...'")
                 
         except Exception as e:
             import traceback
             print(f"Error sending status: {e}")
             traceback.print_exc()
     
-    # Send processed audio to partner
-    if processed_audio:
+    # Send processed audio to partner (only if partner exists)
+    if processed_audio and partner_ws:
         try:
             print(f"SENDING AUDIO to partner: {len(processed_audio)} bytes")
             await partner_ws.send_bytes(processed_audio)

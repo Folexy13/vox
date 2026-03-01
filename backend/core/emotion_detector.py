@@ -19,7 +19,8 @@ class EmotionDetector:
     """
     
     def __init__(self):
-        self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        # Use gemini-3-flash-preview - latest and smartest fast model
+        self.model = genai.GenerativeModel('gemini-3-flash-preview')
         
         # Emotion categories with their characteristics
         self.emotions = {
@@ -159,6 +160,9 @@ Rules:
 Text to translate: {text}"""
 
         try:
+            print(f"EMOTION TRANSLATION: {source_language} -> {target_language}")
+            print(f"EMOTION TRANSLATION INPUT: '{text}'")
+            
             response = await self.model.generate_content_async(
                 translation_prompt,
                 generation_config=genai.GenerationConfig(
@@ -169,13 +173,17 @@ Text to translate: {text}"""
             
             if response and response.text:
                 translated = response.text.strip()
+                print(f"EMOTION TRANSLATION OUTPUT: '{translated}'")
                 emotion_data["emotionPreserved"] = True
                 return translated, emotion_data
             else:
+                print(f"EMOTION TRANSLATION: No response from Gemini")
                 return text, emotion_data
                 
         except Exception as e:
             print(f"Emotion-aware translation error: {e}")
+            import traceback
+            traceback.print_exc()
             return text, emotion_data
     
     def get_prosody_for_tts(self, emotion: str) -> Dict:
