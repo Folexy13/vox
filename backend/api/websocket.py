@@ -1,455 +1,79 @@
-"""
-WebSocket API Module
-Handles real-time audio streaming and room management
-"""
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, UploadFile, File, HTTPException
-from typing import Dict, Optional
 import asyncio
-import uuid
-import json
-import struct
-from google.cloud import storage
-from core.audio_pipeline import AudioPipeline
-from core.voice_profiler import VoiceProfiler
-from config import config
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from loguru import logger
+from pipecat.pipeline.pipeline import Pipeline
+from pipecat.pipeline.task import PipelineTask, PipelineParams
+from pipecat.pipeline.runner import PipelineRunner
+from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.services.google.gemini_live.llm import GeminiLiveLLMService
+from pipecat.transports.network.websocket_server import WebsocketServerTransport, WebsocketServerParams
+from pipecat.services.google import GoogleTTSService
+import os
 
 router = APIRouter()
 
-# Global state for active meetings
-# room_id -> { "created_at": timestamp, "users": { user_id: {username, language, profile_id} } }
-active_meetings: Dict[str, dict] = {}
-
-# Connection tracking: room_id -> {user_id -> WebSocket}
-rooms: Dict[str, Dict[str, WebSocket]] = {}
-# room_id -> AudioPipeline
-pipelines: Dict[str, AudioPipeline] = {}
-
-try:
-    storage_client = storage.Client()
-except Exception as e:
-    print(f"Warning: Could not initialize GCS client: {e}")
-    storage_client = None
-
-# Initialize voice profiler
-voice_profiler = VoiceProfiler()
-
-@router.post("/api/rooms")
-async def create_room():
-    """
-    Creates a new validated meeting session.
-    """
-    room_id = str(uuid.uuid4())[:8]
-    active_meetings[room_id] = {"users": {}}
-    print(f"SESSION CREATED: {room_id}")
-    return {"room_id": room_id}
-
-@router.get("/api/rooms/{room_id}/verify")
-async def verify_room(room_id: str):
-    """
-    Checks if a meeting session exists.
-    Returns 404 if room doesn't exist - users must use a valid meeting link.
-    """
-    if room_id not in active_meetings:
-        raise HTTPException(status_code=404, detail="Meeting session not found or expired")
-    return {"status": "valid", "user_count": len(active_meetings[room_id].get("users", {}))}
-
-@router.post("/api/voice-profile")
-async def create_voice_profile(file: UploadFile = File(...)):
-    """
-    Upload and analyze voice profile for voice matching.
-    Extracts pitch, tempo, and energy characteristics from the audio sample.
-    """
-    content = await file.read()
-    profile_id = f"profile-{uuid.uuid4()}"
-    
-    try:
-        # Analyze the voice sample to extract characteristics
-        profile_id, profile_data = await voice_profiler.create_profile_from_audio(content, profile_id)
-        
-        print(f"Voice profile created: {profile_id}")
-        print(f"  - Pitch: {profile_data.get('pitch_hz', 'N/A')}Hz")
-        print(f"  - Pitch adjustment: {profile_data.get('pitch_adjustment', 'N/A')} semitones")
-        print(f"  - Tempo: {profile_data.get('tempo', 'N/A')}x")
-        
-        return {
-            "profile_id": profile_id,
-            "analysis": {
-                "pitch_hz": profile_data.get("pitch_hz"),
-                "pitch_adjustment": profile_data.get("pitch_adjustment"),
-                "tempo": profile_data.get("tempo"),
-                "duration_seconds": profile_data.get("sample_duration_seconds")
-            }
-        }
-    except Exception as e:
-        print(f"Voice profile creation error: {e}")
-        # Fallback - still create a profile ID but with default values
-        return {"profile_id": f"local-{profile_id}", "analysis": None}
-
-
-@router.post("/api/voice-preview")
-@router.get("/api/voice-preview")
-async def preview_voice(
-    text: str = "Hello! This is how you will sound in the meeting.",
-    language: str = "en-US",
-    profile_id: str = ""
-):
-    """
-    Generate a voice preview using TTS with the user's voice profile.
-    Lets users hear how they'll sound before joining the meeting.
-    """
-    from core.voice_synthesizer import VoiceSynthesizer
-    from fastapi.responses import Response
-    
-    print(f"Voice preview request: text='{text[:50]}...', language={language}, profile_id={profile_id}")
-    
-    try:
-        synthesizer = VoiceSynthesizer()
-        
-        # Generate speech with the user's voice profile
-        audio_bytes = await synthesizer.synthesize(
-            text=text,
-            language_code=language,
-            profile_id=profile_id if profile_id else None
-        )
-        
-        if audio_bytes:
-            print(f"Voice preview generated: {len(audio_bytes)} bytes")
-            # Return as audio/wav
-            return Response(
-                content=audio_bytes,
-                media_type="audio/wav",
-                headers={
-                    "Content-Disposition": "inline; filename=preview.wav"
-                }
-            )
-        else:
-            print("Voice preview failed: no audio returned")
-            raise HTTPException(status_code=500, detail="Failed to generate audio")
-            
-    except Exception as e:
-        print(f"Voice preview error: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.websocket("/ws/{room_id}/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
-    """
-    WebSocket endpoint for real-time audio streaming
-    
-    Protocol:
-    1. Client sends JOIN message with username and language
-    2. Server sends READY when partner joins
-    3. Client sends audio chunks as binary with VAD metadata
-    4. Server processes and sends back translated audio
-    """
-    # Validate room exists before accepting connection
-    if room_id not in active_meetings:
-        await websocket.close(code=4004, reason="Meeting session not found")
-        return
-
     await websocket.accept()
-    
-    # Expect first message to be a JOIN message with username
-    try:
-        init_data = await websocket.receive_json()
-        if init_data.get("type") != "JOIN" or not init_data.get("username"):
-            print(f"VERIFICATION FAILURE: Room {room_id}, User {user_id}")
-            await websocket.close(code=4003)
-            return
-        
-        username = init_data["username"]
-        user_language = init_data.get("language", "en-US")
-        profile_id = init_data.get("profileId")
-        
-        print(f"USER JOINED: Room {room_id}, User {username} ({user_id}), Language: {user_language}")
-        
-        # Initialize room structures if needed
-        if room_id not in rooms:
-            rooms[room_id] = {}
-            pipelines[room_id] = AudioPipeline(room_id)
-            
-        rooms[room_id][user_id] = websocket
-        active_meetings[room_id]["users"][user_id] = {
-            "username": username,
-            "language": user_language,
-            "profile_id": profile_id
-        }
-        
-        # Set user's language, profile, and name in pipeline
-        pipeline = pipelines[room_id]
-        pipeline.set_user_language(user_id, user_language)
-        pipeline.set_speaker_name(user_id, username)  # For "listening to" display
-        if profile_id:
-            pipeline.set_user_profile(user_id, profile_id)
-        
-        # Notify if partner is already here
-        partner_id = next((uid for uid in rooms[room_id] if uid != user_id), None)
-        if partner_id:
-            partner_data = active_meetings[room_id]["users"].get(partner_id, {})
-            partner_name = partner_data.get("username", "Guest")
-            partner_language = partner_data.get("language", "en-US")
-            
-            # Tell NEW user about OLD user
-            await websocket.send_json({
-                "type": "READY", 
-                "partnerName": partner_name,
-                "partnerLanguage": partner_language,
-                "message": f"Connected with {partner_name}"
-            })
-            
-            # Tell OLD user about NEW user
-            await rooms[room_id][partner_id].send_json({
-                "type": "READY", 
-                "partnerName": username,
-                "partnerLanguage": user_language,
-                "message": f"{username} joined the meeting"
-            })
+    logger.info(f"User {user_id} joined room {room_id} over Pipecat WebSocket")
 
-        # Main message loop
-        while True:
-            message = await websocket.receive()
-            
-            if "bytes" in message:
-                # Binary audio data
-                audio_data = message["bytes"]
-                print(f"BINARY AUDIO from {user_id}: {len(audio_data)} bytes")
-                await handle_audio_message(
-                    room_id, user_id, audio_data, 
-                    vad_speaking=True  # Default to speaking if no metadata
-                )
-            
-            elif "text" in message:
-                # JSON control message
-                try:
-                    data = json.loads(message["text"])
-                    msg_type = data.get("type")
-                    
-                    if msg_type == "AUDIO_WITH_VAD":
-                        # Audio data with VAD metadata
-                        # Audio is base64 encoded in the message
-                        import base64
-                        audio_bytes = base64.b64decode(data.get("audio", ""))
-                        vad_speaking = data.get("speaking", True)
-                        
-                        await handle_audio_message(
-                            room_id, user_id, audio_bytes, vad_speaking
-                        )
-                    
-                    elif msg_type == "LANGUAGE_UPDATE":
-                        # User changed their language preference
-                        new_language = data.get("language")
-                        if new_language:
-                            active_meetings[room_id]["users"][user_id]["language"] = new_language
-                            pipeline.set_user_language(user_id, new_language)
-                            
-                            # Notify partner
-                            partner_id = next((uid for uid in rooms[room_id] if uid != user_id), None)
-                            if partner_id:
-                                await rooms[room_id][partner_id].send_json({
-                                    "type": "LANGUAGE_UPDATE",
-                                    "language": new_language,
-                                    "user": "partner"
-                                })
-                    
-                    elif msg_type == "MUTE":
-                        # User muted/unmuted
-                        is_muted = data.get("muted", False)
-                        print(f"User {user_id} {'muted' if is_muted else 'unmuted'}")
-                    
-                    elif msg_type == "PING":
-                        # Heartbeat ping - respond with pong
-                        await websocket.send_json({"type": "PONG"})
-                        
-                        # Update last heartbeat time for this user
-                        if room_id in active_meetings and user_id in active_meetings[room_id].get("users", {}):
-                            active_meetings[room_id]["users"][user_id]["last_heartbeat"] = asyncio.get_event_loop().time()
-                            
-                            # Notify partner that this user is online
-                            partner_id = next((uid for uid in rooms.get(room_id, {}) if uid != user_id), None)
-                            if partner_id and partner_id in rooms.get(room_id, {}):
-                                try:
-                                    await rooms[room_id][partner_id].send_json({
-                                        "type": "PARTNER_HEARTBEAT",
-                                        "online": True
-                                    })
-                                except:
-                                    pass
-                    
-                    elif msg_type == "LEAVE":
-                        # User is leaving the call
-                        print(f"User {user_id} leaving room {room_id}")
-                        await cleanup_user(room_id, user_id)
-                        await websocket.close(code=1000, reason="User left")
-                        return
-                        
-                except json.JSONDecodeError:
-                    print(f"Invalid JSON message from {user_id}")
+    try:
+        # 1. Transport setup (WebSocket for audio in/out)
+        transport = WebsocketServerTransport(
+            params=WebsocketServerParams(
+                audio_in_enabled=True,
+                audio_out_enabled=True,
+                add_wav_header=False,
+                vad_enabled=True,
+                vad_analyzer=SileroVADAnalyzer(),
+                vad_audio_passthrough=True
+            )
+        )
+
+        # 2. Native Gemini Live setup (Handles intent, transcription, translation natively)
+        llm_service = GeminiLiveLLMService(
+            api_key=os.getenv("GOOGLE_API_KEY", ""),
+            model="gemini-2.0-flash-exp",
+            system_instruction=(
+                "You are Vox, an invisible real-time translation agent. "
+                "You listen to the user and translate their speech to the other user's language smoothly. "
+                "Retain their emotional register and keep it conversational."
+            )
+        )
+
+        # 3. Google TTS setup (For voice cloning and playback)
+        tts_service = GoogleTTSService(
+            credentials_path=os.getenv("GOOGLE_APPLICATION_CREDENTIALS"),
+            voice_name="en-US-Journey-F", # Default, can be dynamically swapped per session
+        )
+
+        # 4. Construct Pipecat Pipeline
+        # Audio from Transport -> VAD -> Gemini Live -> TTS -> Transport Output
+        pipeline = Pipeline([
+            transport.input(),    # Receive user audio
+            llm_service,          # Process meaning and translate
+            tts_service,          # Convert text translation back to speech
+            transport.output()    # Send back to the caller
+        ])
+
+        task = PipelineTask(
+            pipeline,
+            PipelineParams(
+                allow_interruptions=True,
+                enable_metrics=True,
+                send_initial_empty_metrics=False
+            )
+        )
+
+        runner = PipelineRunner()
+
+        # In a real Pipecat deployment, the transport needs the connection to run.
+        # Since FastAPI manages the websocket, we map FastAPI's websocket to the Pipecat transport here.
+        transport._websocket = websocket 
+
+        await runner.run(task)
 
     except WebSocketDisconnect:
-        print(f"USER DISCONNECTED: {user_id}")
-        await cleanup_user(room_id, user_id)
-        
+        logger.info(f"User {user_id} disconnected from room {room_id}")
     except Exception as e:
-        print(f"WEBSOCKET ERROR: {e}")
-        await cleanup_user(room_id, user_id)
-
-
-async def handle_audio_message(
-    room_id: str, 
-    user_id: str, 
-    audio_data: bytes, 
-    vad_speaking: bool
-):
-    """
-    Process incoming audio and send to partner
-    Also shows transcript to speaker even without partner
-    """
-    if room_id not in rooms or room_id not in pipelines:
-        print(f"NO ROOM/PIPELINE for {room_id}")
-        return
-    
-    partner_id = next((uid for uid in rooms[room_id] if uid != user_id), None)
-    has_partner = partner_id is not None
-    
-    pipeline = pipelines[room_id]
-    user_ws = rooms[room_id].get(user_id)
-    
-    # Process audio through pipeline (even without partner for transcript)
-    # Use a dummy partner_id if no partner, just for processing
-    target_partner = partner_id or "no_partner"
-    print(f"PROCESSING AUDIO: {len(audio_data)} bytes from {user_id} to {target_partner}")
-    processed_audio, status_update = await pipeline.process_audio_chunk(
-        user_id, target_partner, audio_data, vad_speaking
-    )
-    print(f"PIPELINE RESULT: audio={len(processed_audio) if processed_audio else 0} bytes, status={status_update}")
-    
-    partner_ws = rooms[room_id].get(partner_id) if partner_id else None
-    
-    # Send status update to both users
-    if status_update:
-        try:
-            # Send to speaker (user) - ALWAYS send to speaker
-            if user_ws:
-                await user_ws.send_json(status_update)
-            
-            # Send relevant status to partner (only if partner exists)
-            if status_update.get("type") == "STATUS":
-                # Get user's language from meeting data
-                user_language = None
-                if room_id in active_meetings and user_id in active_meetings[room_id].get("users", {}):
-                    user_language = active_meetings[room_id]["users"][user_id].get("language")
-                
-                if partner_ws:
-                    partner_status = {
-                        "type": "PARTNER_STATUS",
-                        "status": status_update.get("status"),
-                        "partnerLanguage": status_update.get("from_language") or user_language
-                    }
-                    await partner_ws.send_json(partner_status)
-                
-                # Send TRANSCRIPT message if we have transcript data
-                transcript = status_update.get("transcript")
-                translated = status_update.get("translated")
-                
-                if transcript:
-                    # ALWAYS send transcript to the speaker (their own words)
-                    if user_ws:
-                        await user_ws.send_json({
-                            "type": "TRANSCRIPT",
-                            "isUser": True,
-                            "original": transcript,
-                            "translated": translated,
-                            "sourceLanguage": status_update.get("from_language"),
-                            "targetLanguage": status_update.get("to_language"),
-                            "confidence": status_update.get("confidence", 0.9),
-                            "emotion": status_update.get("emotion"),
-                            "emotionPreserved": status_update.get("emotionPreserved", True),
-                        })
-                        print(f"TRANSCRIPT sent to speaker: '{transcript[:50]}...'")
-                    
-                    # Send transcript to the partner (only if partner exists)
-                    if partner_ws:
-                        await partner_ws.send_json({
-                            "type": "TRANSCRIPT",
-                            "isUser": False,
-                            "original": transcript,
-                            "translated": translated,
-                            "sourceLanguage": status_update.get("from_language"),
-                            "targetLanguage": status_update.get("to_language"),
-                            "confidence": status_update.get("confidence", 0.9),
-                            "emotion": status_update.get("emotion"),
-                            "emotionPreserved": status_update.get("emotionPreserved", True),
-                        })
-                        print(f"TRANSCRIPT sent to partner: '{translated[:50] if translated else transcript[:50]}...'")
-                
-        except Exception as e:
-            import traceback
-            print(f"Error sending status: {e}")
-            traceback.print_exc()
-    
-    # Send processed audio to partner (only if partner exists)
-    if processed_audio and partner_ws:
-        try:
-            print(f"SENDING AUDIO to partner: {len(processed_audio)} bytes")
-            await partner_ws.send_bytes(processed_audio)
-            print(f"AUDIO SENT successfully")
-        except Exception as e:
-            import traceback
-            print(f"Error sending audio: {e}")
-            traceback.print_exc()
-
-
-async def cleanup_user(room_id: str, user_id: str):
-    """
-    Clean up when a user disconnects.
-    Room is kept alive for 5 minutes to allow rejoining.
-    """
-    if room_id in rooms and user_id in rooms[room_id]:
-        del rooms[room_id][user_id]
-        
-        # Clear audio buffer for this user in the pipeline
-        if room_id in pipelines:
-            pipeline = pipelines[room_id]
-            if user_id in pipeline.audio_buffers:
-                pipeline.audio_buffers[user_id] = b""
-                pipeline.silence_counters[user_id] = 0
-        
-        if user_id in active_meetings.get(room_id, {}).get("users", {}):
-            del active_meetings[room_id]["users"][user_id]
-            
-        if not rooms[room_id]:
-            # Room is empty, clean up connection tracking but keep meeting alive
-            del rooms[room_id]
-            if room_id in pipelines:
-                del pipelines[room_id]
-            # Schedule room deletion after 5 minutes grace period
-            asyncio.create_task(schedule_room_cleanup(room_id, delay_seconds=300))
-        else:
-            # Notify remaining partner
-            partner_id = next(iter(rooms[room_id]))
-            try:
-                # Send partner offline notification
-                await rooms[room_id][partner_id].send_json({
-                    "type": "PARTNER_HEARTBEAT",
-                    "online": False
-                })
-                # Also send partner left message
-                await rooms[room_id][partner_id].send_json({
-                    "type": "PARTNER_LEFT", 
-                    "message": "Partner disconnected."
-                })
-            except:
-                pass
-
-
-async def schedule_room_cleanup(room_id: str, delay_seconds: int = 300):
-    """
-    Delete room after a grace period if no one rejoins.
-    """
-    await asyncio.sleep(delay_seconds)
-    # Only delete if room is still empty (no one rejoined)
-    if room_id in active_meetings and room_id not in rooms:
-        del active_meetings[room_id]
-        print(f"ROOM EXPIRED: {room_id} (no activity for {delay_seconds}s)")
+        logger.error(f"Error in pipecat pipeline for user {user_id}: {e}")
