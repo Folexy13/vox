@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.websocket import router as ws_router
+from api.routes import router as http_router
 
 app = FastAPI(title="Vox Backend")
 
@@ -17,7 +18,8 @@ app.add_middleware(
 async def health_check():
     return {"status": "healthy"}
 
-# Include websocket router
+# Include routers
+app.include_router(http_router)
 app.include_router(ws_router)
 
 if __name__ == "__main__":

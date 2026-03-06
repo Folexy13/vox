@@ -7,6 +7,7 @@ services:
       - ./backend/.env
     environment:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/service_account.json
+      - USE_CARTESIA=false
     volumes:
       - ./backend/service_account.json:/app/service_account.json:ro
     depends_on:
