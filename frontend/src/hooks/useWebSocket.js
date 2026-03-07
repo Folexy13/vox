@@ -37,16 +37,30 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
   // Initialize audio context for playback
   const initAudioContext = useCallback(() => {
     if (!audioContext.current) {
-      audioContext.current = new (window.AudioContext || window.webkitAudioContext)({ 
-        sampleRate: 16000 
-      });
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) {
+        audioContext.current = new AudioContextClass({ sampleRate: 16000 });
+      }
     }
     // Resume if suspended (browser autoplay policy)
-    if (audioContext.current.state === 'suspended') {
-      audioContext.current.resume();
+    if (audioContext.current && audioContext.current.state === 'suspended') {
+      audioContext.current.resume().catch(err => console.warn('Could not resume audio context:', err));
     }
     return audioContext.current;
   }, []);
+
+  // Force initialize audio context on initial mount to bypass autoplay restrictions
+  useEffect(() => {
+    const ctx = initAudioContext();
+    if (ctx) {
+      // Create and play a tiny silent buffer to "unlock" the audio context
+      const buffer = ctx.createBuffer(1, 1, 22050);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start(0);
+    }
+  }, [initAudioContext]);
 
   // Track next scheduled playback time for seamless audio
   const nextPlayTime = useRef(0);

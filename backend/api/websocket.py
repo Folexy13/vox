@@ -27,6 +27,7 @@ class RawBinarySerializer(FrameSerializer):
         super().__init__()
         self.room_id = room_id
         self.user_id = user_id
+        self.ratecv_state = None
 
     async def deserialize(self, data: bytes | str):
         if isinstance(data, bytes):
@@ -58,7 +59,16 @@ class RawBinarySerializer(FrameSerializer):
     
     async def serialize(self, frame):
         if isinstance(frame, TTSAudioRawFrame):
-            return frame.audio
+            audio_to_send = frame.audio
+            # Ensure the frontend gets exactly 16kHz PCM16, as it expects
+            if getattr(frame, "sample_rate", 24000) != 16000:
+                try:
+                    audio_to_send, self.ratecv_state = audioop.ratecv(
+                        frame.audio, 2, 1, getattr(frame, "sample_rate", 24000), 16000, self.ratecv_state
+                    )
+                except Exception as e:
+                    logger.error(f"Serializer resample error: {e}")
+            return audio_to_send
         return None
 
 class DropGeminiAudioProcessor(FrameProcessor):
@@ -231,10 +241,12 @@ async def agent_websocket_endpoint(websocket: WebSocket, user_id: str):
                 model="gemini-2.5-flash-native-audio-latest",
                 voice_id="Puck",
                 system_instruction=(
-                    f"You are Vox, a highly intelligent, deeply empathetic, and inspiring AI companion. "
+                    f"You are Voxa, a highly intelligent, deeply empathetic, and inspiring AI companion. "
                     f"You MUST speak strictly in {lang_name} for this entire conversation. "
-                    f"You are talking to a user named {current_name}. "
+                    f"You are talking to a user. "
                     f"Your goal is to have a deeply engaging, profoundly human-like conversation. "
+                    f"When the user tells you their name, remember it and use it warmly in the conversation. "
+                    f"Then ask them what you can do for them today. "
                     f"If they discuss life issues, offer wise, grounded, and emotionally intelligent advice. "
                     f"If they lack motivation, be powerfully inspiring and uplift them. "
                     f"Act exactly like a brilliant mentor and friend talking on a late-night phone call. "
@@ -252,6 +264,16 @@ async def agent_websocket_endpoint(websocket: WebSocket, user_id: str):
             
             ROOMS["agent_room"][user_id]["task"] = task
             runner = PipelineRunner()
+            
+            # Make the bot speak first!
+            # We queue a text frame mimicking the user joining, so Gemini automatically replies out loud.
+            greeting_msg = [
+                {
+                    "role": "user",
+                    "content": "I have just connected to the call. Please immediately speak to me: Introduce yourself as Voxa, and ask for my name."
+                }
+            ]
+            await task.queue_frames([LLMMessagesAppendFrame(messages=greeting_msg)])
             
             # Send READY signal to frontend
             await websocket.send_json({"type": "READY", "partnerName": "Vox AI", "partnerLanguage": current_lang})
