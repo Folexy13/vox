@@ -30,6 +30,16 @@ const StatusIndicator = ({ status, partnerStatus, emotion, partnerEmotion, liste
           animate: 'animate-spin',
         };
         
+      case 'connected':
+        return {
+          icon: Loader2,
+          text: 'Initializing agent...',
+          color: 'text-google-yellow',
+          bgColor: 'bg-google-yellow/20',
+          borderColor: 'border-google-yellow/30',
+          animate: 'animate-spin',
+        };
+        
       case 'listening':
         return {
           icon: Mic,

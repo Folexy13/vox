@@ -62,7 +62,6 @@ class RawBinarySerializer(FrameSerializer):
         # Handle both TTSAudioRawFrame (from TTS services) and OutputAudioRawFrame (from Gemini Live native audio)
         if isinstance(frame, (TTSAudioRawFrame, OutputAudioRawFrame)):
             audio_data = frame.audio
-            logger.debug(f"Serializing audio frame: {type(frame).__name__}, {len(audio_data)} bytes, sample_rate={getattr(frame, 'sample_rate', 'unknown')}")
             # For agent mode, we send at native 24kHz since frontend plays at 24kHz
             # For meeting mode, RouteToPartnerProcessor handles resampling before this point
             return audio_data
