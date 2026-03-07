@@ -49,12 +49,18 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
   const gainNode = useRef(null);
 
   // Play audio from PCM16 bytes with scheduled timing for smooth playback
+  // isAgent mode uses 24kHz (Gemini native), meeting mode uses 16kHz (resampled by backend)
   const playAudio = useCallback((audioData) => {
     try {
       const ctx = initAudioContext();
       if (!ctx) return;
       
-      console.log(`Playing audio: ${audioData.byteLength} bytes, context state: ${ctx.state}`);
+      // Determine sample rate based on mode:
+      // - Agent mode: Gemini outputs at 24kHz natively
+      // - Meeting mode: Backend resamples to 16kHz before sending to partner
+      const sampleRate = isAgent ? 24000 : 16000;
+      
+      console.log(`Playing audio: ${audioData.byteLength} bytes at ${sampleRate}Hz, context state: ${ctx.state}`);
       
       // Create gain node once and reuse
       if (!gainNode.current) {
@@ -73,8 +79,8 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
         float32Data[i] = int16Data[i] / (int16Data[i] < 0 ? 0x8000 : 0x7fff);
       }
       
-      // Create audio buffer (Gemini natively streams at 24000 Hz)
-      const buffer = ctx.createBuffer(1, float32Data.length, 24000);
+      // Create audio buffer with correct sample rate for the mode
+      const buffer = ctx.createBuffer(1, float32Data.length, sampleRate);
       buffer.getChannelData(0).set(float32Data);
       
       const currentTime = ctx.currentTime;
@@ -92,7 +98,7 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
     } catch (err) {
       console.error('Audio playback error:', err);
     }
-  }, [initAudioContext]);
+  }, [initAudioContext, isAgent]);
 
   // Process audio queue
   const processAudioQueue = useCallback(() => {

@@ -12,7 +12,7 @@ from pipecat.audio.filters.rnnoise_filter import RNNoiseFilter
 from pipecat.transports.websocket.fastapi import FastAPIWebsocketTransport, FastAPIWebsocketParams
 from pipecat.services.cartesia import CartesiaTTSService
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
-from pipecat.frames.frames import TTSAudioRawFrame, TextFrame, LLMFullResponseEndFrame, InputAudioRawFrame, TranscriptionFrame, LLMMessagesAppendFrame, CancelTaskFrame
+from pipecat.frames.frames import TTSAudioRawFrame, OutputAudioRawFrame, TextFrame, LLMFullResponseEndFrame, InputAudioRawFrame, TranscriptionFrame, LLMMessagesAppendFrame, CancelTaskFrame
 from pipecat.serializers.base_serializer import FrameSerializer
 import json
 import audioop
@@ -23,11 +23,12 @@ router = APIRouter()
 ROOMS = {}
 
 class RawBinarySerializer(FrameSerializer):
-    def __init__(self, room_id: str, user_id: str):
+    def __init__(self, room_id: str, user_id: str, resample_to_16k: bool = False):
         super().__init__()
         self.room_id = room_id
         self.user_id = user_id
         self.ratecv_state = None
+        self.resample_to_16k = resample_to_16k
 
     async def deserialize(self, data: bytes | str):
         if isinstance(data, bytes):
@@ -58,8 +59,13 @@ class RawBinarySerializer(FrameSerializer):
         return None
     
     async def serialize(self, frame):
-        if isinstance(frame, TTSAudioRawFrame):
-            return frame.audio
+        # Handle both TTSAudioRawFrame (from TTS services) and OutputAudioRawFrame (from Gemini Live native audio)
+        if isinstance(frame, (TTSAudioRawFrame, OutputAudioRawFrame)):
+            audio_data = frame.audio
+            logger.debug(f"Serializing audio frame: {type(frame).__name__}, {len(audio_data)} bytes, sample_rate={getattr(frame, 'sample_rate', 'unknown')}")
+            # For agent mode, we send at native 24kHz since frontend plays at 24kHz
+            # For meeting mode, RouteToPartnerProcessor handles resampling before this point
+            return audio_data
         return None
 
 class DropGeminiAudioProcessor(FrameProcessor):
@@ -71,7 +77,7 @@ class DropGeminiAudioProcessor(FrameProcessor):
     async def process_frame(self, frame, direction):
         await super().process_frame(frame, direction)
         
-        if isinstance(frame, TTSAudioRawFrame):
+        if isinstance(frame, (TTSAudioRawFrame, OutputAudioRawFrame)):
             # Drop Gemini's native audio so only Cartesia's audio plays
             return
         
@@ -143,7 +149,8 @@ class RouteToPartnerProcessor(FrameProcessor):
     async def process_frame(self, frame, direction):
         await super().process_frame(frame, direction)
         
-        if isinstance(frame, TTSAudioRawFrame):
+        # Handle both TTSAudioRawFrame and OutputAudioRawFrame (Gemini Live native audio)
+        if isinstance(frame, (TTSAudioRawFrame, OutputAudioRawFrame)):
             audio_to_send = frame.audio
             # If audio is not 16kHz (like Gemini's default 24kHz), we MUST resample
             if getattr(frame, "sample_rate", 24000) != 16000:
