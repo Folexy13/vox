@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
  * WebSocket Hook for real-time audio communication
  * Handles connection, audio streaming, and status updates
  */
-export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', profileId = null, onTranscript = null) => {
+export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', profileId = null, onTranscript = null, isAgent = false) => {
   const [isConnected, setIsConnected] = useState(false);
   const [partnerJoined, setPartnerJoined] = useState(false);
   const [partnerName, setPartnerName] = useState('Guest');
@@ -222,7 +222,7 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
       ? `${wsProtocol}//${backendHost}/ws/agent/${userId}`
       : `${wsProtocol}//${backendHost}/ws/${roomId}/${userId}`;
     
-    console.log(`Connecting to ${wsUrl} as ${usernameRef.current}`);
+    console.log(`Connecting to ${wsUrl} as ${usernameRef.current} (isAgent: ${isAgent})`);
     setStatus('connecting');
     
     ws.current = new WebSocket(wsUrl);
@@ -304,7 +304,7 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
         setStatus('disconnected');
       }
     };
-  }, [roomId, userId, profileId, processAudioQueue, handleControlMessage]);
+  }, [roomId, userId, profileId, isAgent, processAudioQueue, handleControlMessage]);
 
   // Disconnect from WebSocket
   const disconnect = useCallback(() => {
