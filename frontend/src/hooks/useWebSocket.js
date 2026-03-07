@@ -88,8 +88,10 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
         gainNode.current.connect(ctx.destination);
       }
       
-      // Convert ArrayBuffer to Int16Array
-      const int16Data = new Int16Array(audioData);
+      // Ensure we have an even number of bytes for Int16Array
+      // Some AI providers send chunks that aren't perfectly aligned to 2-byte boundaries
+      const safeLength = Math.floor(audioData.byteLength / 2) * 2;
+      const int16Data = new Int16Array(audioData.slice(0, safeLength));
       
       // Convert Int16 to Float32 for Web Audio API
       const float32Data = new Float32Array(int16Data.length);
