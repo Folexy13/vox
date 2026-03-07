@@ -183,12 +183,22 @@ async def agent_websocket_endpoint(websocket: WebSocket, user_id: str):
     logger.info(f"User {user_id} started an Agent session")
 
     user_name = "Guest"
+    user_lang = "en-US"
     try:
         data = await asyncio.wait_for(websocket.receive_json(), timeout=2.0)
         if data.get("type") == "JOIN":
             user_name = data.get("username", "Guest")
+            user_lang = data.get("language", "en-US")
     except Exception as e:
         logger.warning(f"Could not receive JOIN message: {e}")
+
+    # Register the agent user in ROOMS so they can send LANGUAGE_UPDATE JSON
+    ROOMS["agent_room"] = ROOMS.get("agent_room", {})
+    ROOMS["agent_room"][user_id] = {
+        "websocket": websocket,
+        "name": user_name,
+        "language": user_lang
+    }
 
     try:
         # For agent mode, we DO want audio_out_enabled=True so the AI talks back to the user!
@@ -204,43 +214,75 @@ async def agent_websocket_endpoint(websocket: WebSocket, user_id: str):
             )
         )
 
-        gemini_params = InputParams(
-            thinking=ThinkingConfig(thinking_budget=0),
-            vad=GeminiVADParams(
-                prefix_padding_ms=150,
-                silence_duration_ms=700
+        while True:
+            # Re-read language dynamically for this pipeline iteration
+            current_user_data = ROOMS["agent_room"].get(user_id, {})
+            current_lang = current_user_data.get("language", "en-US")
+            
+            LANGUAGE_MAP = {
+                "en-US": "American English",
+                "en-GB": "British English",
+                "en-NG": "Nigerian English",
+                "fr-FR": "French",
+                "es-ES": "Spanish",
+                "pt-BR": "Portuguese",
+                "de-DE": "German"
+            }
+            lang_name = LANGUAGE_MAP.get(current_lang, current_lang)
+
+            gemini_params = InputParams(
+                thinking=ThinkingConfig(thinking_budget=0),
+                vad=GeminiVADParams(
+                    prefix_padding_ms=150,
+                    silence_duration_ms=700
+                )
             )
-        )
 
-        llm_service = GeminiLiveLLMService(
-            api_key=os.getenv("GOOGLE_API_KEY", ""),
-            model="gemini-2.5-flash-native-audio-latest",
-            voice_id="Puck",
-            system_instruction=(
-                f"You are Vox, an empathetic, highly intelligent AI companion. "
-                f"You are talking to a user named {user_name}. "
-                f"Have a natural, friendly, and engaging conversation with them. "
-                f"You can discuss life issues, brainstorm ideas, give advice, or just chat. "
-                f"Keep your responses concise and natural, like a real human speaking on the phone."
-            ),
-            params=gemini_params
-        )
+            llm_service = GeminiLiveLLMService(
+                api_key=os.getenv("GOOGLE_API_KEY", ""),
+                model="gemini-2.5-flash-native-audio-latest",
+                voice_id="Puck",
+                system_instruction=(
+                    f"You are Vox, a highly intelligent, deeply empathetic, and inspiring AI companion. "
+                    f"You MUST speak strictly in {lang_name} for this entire conversation. "
+                    f"You are talking to a user named {user_name}. "
+                    f"Your goal is to have a deeply engaging, profoundly human-like conversation. "
+                    f"If they discuss life issues, offer wise, grounded, and emotionally intelligent advice. "
+                    f"If they lack motivation, be powerfully inspiring and uplift them. "
+                    f"Act exactly like a brilliant mentor and friend talking on a late-night phone call. "
+                    f"Keep your responses naturally paced, insightful, and warmly conversational. "
+                    f"Never break character. Never act robotic."
+                ),
+                params=gemini_params
+            )
 
-        pipeline = Pipeline([
-            transport.input(),
-            llm_service,
-            transport.output()
-        ])
+            pipeline = Pipeline([
+                transport.input(),
+                llm_service,
+                transport.output()
+            ])
 
-        task = PipelineTask(pipeline)
-        runner = PipelineRunner()
-        
-        await websocket.send_json({"type": "READY", "partnerName": "Vox AI", "partnerLanguage": "en-US"})
-        
-        await runner.run(task)
+            task = PipelineTask(
+                pipeline,
+                params=PipelineParams(
+                    allow_interruptions=True, # Allow the user to interrupt the agent!
+                    enable_metrics=False
+                )
+            )
+            
+            ROOMS["agent_room"][user_id]["task"] = task
+            runner = PipelineRunner()
+            
+            await websocket.send_json({"type": "READY", "partnerName": "Vox AI", "partnerLanguage": current_lang})
+            
+            await runner.run(task)
+            
+            logger.info(f"Agent pipeline finished for {user_id}, looping to apply potential new language...")
 
     except WebSocketDisconnect:
         logger.info(f"Agent session ended for user {user_id}")
+        if "agent_room" in ROOMS and user_id in ROOMS["agent_room"]:
+            del ROOMS["agent_room"][user_id]
     except Exception as e:
         logger.error(f"Error in agent pipeline: {e}")
 
