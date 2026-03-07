@@ -312,15 +312,15 @@ async def agent_websocket_endpoint(websocket: WebSocket, user_id: str):
             runner = PipelineRunner()
             
             # Make the bot speak first!
-            # We queue a text frame mimicking the user joining, so Gemini automatically replies out loud.
-            greeting_msg = [
-                {
-                    "role": "user",
-                    "content": "I have just connected to the call. Please immediately speak to me: Introduce yourself as Voxa, and ask for my name."
-                }
-            ]
-            await task.queue_frames([LLMMessagesAppendFrame(messages=greeting_msg)])
-            
+            @task.event_handler("on_pipeline_started")
+            async def on_pipeline_started(task, frame):
+                # Trigger the greeting by sending a message to the LLM
+                # We use run_llm=True to force immediate inference
+                msg = [
+                    {"role": "user", "content": "I have just connected. Introduce yourself as Voxa, and ask for my name."}
+                ]
+                await task.queue_frames([LLMMessagesAppendFrame(messages=msg, run_llm=True)])
+
             # Send READY signal to frontend
             await websocket.send_json({"type": "READY", "partnerName": "Vox AI", "partnerLanguage": current_lang})
             

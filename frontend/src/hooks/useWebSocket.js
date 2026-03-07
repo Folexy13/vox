@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useGlobalAudio } from '../context/AudioContext';
 
 /**
  * WebSocket Hook for real-time audio communication
  * Handles connection, audio streaming, and status updates
  */
 export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', profileId = null, onTranscript = null, isAgent = false) => {
+  const { getAudioContext } = useGlobalAudio();
   const [isConnected, setIsConnected] = useState(false);
   const [partnerJoined, setPartnerJoined] = useState(false);
   const [partnerName, setPartnerName] = useState('Guest');
@@ -16,7 +18,6 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
   const [partnerOnline, setPartnerOnline] = useState(true);
   
   const ws = useRef(null);
-  const audioContext = useRef(null);
   const audioQueue = useRef([]);
   const isPlaying = useRef(false);
   const reconnectAttempts = useRef(0);
@@ -36,31 +37,12 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
 
   // Initialize audio context for playback
   const initAudioContext = useCallback(() => {
-    if (!audioContext.current) {
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-      if (AudioContextClass) {
-        audioContext.current = new AudioContextClass();
-      }
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(err => console.warn('Could not resume audio context:', err));
     }
-    // Resume if suspended (browser autoplay policy)
-    if (audioContext.current && audioContext.current.state === 'suspended') {
-      audioContext.current.resume().catch(err => console.warn('Could not resume audio context:', err));
-    }
-    return audioContext.current;
-  }, []);
-
-  // Force initialize audio context on initial mount to bypass autoplay restrictions
-  useEffect(() => {
-    const ctx = initAudioContext();
-    if (ctx) {
-      // Create and play a tiny silent buffer to "unlock" the audio context
-      const buffer = ctx.createBuffer(1, 1, 22050);
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(ctx.destination);
-      source.start(0);
-    }
-  }, [initAudioContext]);
+    return ctx;
+  }, [getAudioContext]);
 
   // Track next scheduled playback time for seamless audio
   const nextPlayTime = useRef(0);
@@ -70,16 +52,9 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
   const playAudio = useCallback((audioData) => {
     try {
       const ctx = initAudioContext();
+      if (!ctx) return;
       
       console.log(`Playing audio: ${audioData.byteLength} bytes, context state: ${ctx.state}`);
-      
-      // Resume context if suspended
-      if (ctx.state === 'suspended') {
-        console.log('AudioContext suspended, attempting to resume...');
-        ctx.resume().then(() => {
-          console.log('AudioContext resumed successfully');
-        });
-      }
       
       // Create gain node once and reuse
       if (!gainNode.current) {
@@ -89,7 +64,6 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
       }
       
       // Ensure we have an even number of bytes for Int16Array
-      // Some AI providers send chunks that aren't perfectly aligned to 2-byte boundaries
       const safeLength = Math.floor(audioData.byteLength / 2) * 2;
       const int16Data = new Int16Array(audioData.slice(0, safeLength));
       
@@ -103,30 +77,24 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
       const buffer = ctx.createBuffer(1, float32Data.length, 24000);
       buffer.getChannelData(0).set(float32Data);
       
-      // Calculate when to play this chunk
       const currentTime = ctx.currentTime;
-      const bufferDuration = buffer.duration;
-      
-      // Schedule playback - if we're behind, catch up
       if (nextPlayTime.current < currentTime) {
         nextPlayTime.current = currentTime;
       }
       
-      // Create and schedule source
       const source = ctx.createBufferSource();
       source.buffer = buffer;
       source.connect(gainNode.current);
       source.start(nextPlayTime.current);
       
-      // Update next play time
-      nextPlayTime.current += bufferDuration;
+      nextPlayTime.current += buffer.duration;
       
     } catch (err) {
       console.error('Audio playback error:', err);
     }
   }, [initAudioContext]);
 
-  // Process audio queue - now just plays immediately since we use scheduled timing
+  // Process audio queue
   const processAudioQueue = useCallback(() => {
     while (audioQueue.current.length > 0) {
       const audioData = audioQueue.current.shift();
@@ -143,57 +111,24 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
         if (data.partnerLanguage) setPartnerLanguage(data.partnerLanguage);
         setStatus('active');
         break;
-        
       case 'PARTNER_LEFT':
         setPartnerJoined(false);
-        setPartnerName('');
-        setPartnerLanguage('');
         setStatus('waiting');
         break;
-        
       case 'LANGUAGE_UPDATE':
-        if (data.user === 'partner') {
-          setPartnerLanguage(data.language);
-        }
+        if (data.user === 'partner') { setPartnerLanguage(data.language); }
         break;
-        
       case 'STATUS':
-        // Our own status update
         setStatus(data.status);
         if (data.listeningToName) {
           setListeningToName(data.listeningToName === usernameRef.current ? 'You' : data.listeningToName);
         }
         break;
-        
       case 'PARTNER_STATUS':
-        // Partner's status update
         setPartnerStatus(data.status);
-        if (data.partnerLanguage) {
-          setPartnerLanguage(data.partnerLanguage);
-        }
+        if (data.partnerLanguage) { setPartnerLanguage(data.partnerLanguage); }
         break;
-        
-      case 'INTERRUPTED':
-        setStatus('interrupted');
-        setTimeout(() => setStatus('listening'), 500);
-        break;
-        
-      case 'CROSSTALK':
-        setStatus('crosstalk');
-        break;
-        
-      case 'PONG':
-        // Heartbeat response received
-        lastPongTime.current = Date.now();
-        break;
-        
-      case 'PARTNER_HEARTBEAT':
-        // Partner's heartbeat status
-        setPartnerOnline(data.online);
-        break;
-        
       case 'TRANSCRIPT':
-        // Live transcript update - emit event for CallRoom to handle
         if (onTranscriptRef.current) {
           onTranscriptRef.current({
             isUser: data.isUser || false,
@@ -207,51 +142,34 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
           });
         }
         break;
-        
-      case 'ERROR':
-        console.error('Server error:', data.message);
+      case 'PONG':
+        lastPongTime.current = Date.now();
         break;
-        
       default:
-        console.log('Unknown message type:', data.type);
+        break;
     }
   }, []);
 
-  // Connect to WebSocket
   const connect = useCallback(() => {
     if (!roomId || !userId || !username) return;
     if (!shouldReconnect.current) return;
 
-    // Backend URL from environment variable (required for production)
     const backendUrl = import.meta.env.VITE_BACKEND_URL;
-    
-    if (!backendUrl) {
-      console.error('VITE_BACKEND_URL environment variable is not set');
-      setStatus('error');
-      return;
-    }
-    
-    // Convert http/https to ws/wss
     const wsProtocol = backendUrl.startsWith('https') ? 'wss:' : 'ws:';
     const backendHost = backendUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
     const wsUrl = isAgent
       ? `${wsProtocol}//${backendHost}/ws/agent/${userId}`
       : `${wsProtocol}//${backendHost}/ws/${roomId}/${userId}`;
     
-    console.log(`Connecting to ${wsUrl} as ${usernameRef.current} (isAgent: ${isAgent})`);
     setStatus('connecting');
-    
     ws.current = new WebSocket(wsUrl);
     ws.current.binaryType = 'arraybuffer';
 
     ws.current.onopen = () => {
-      console.log('WebSocket Connected - Sending JOIN');
       setIsConnected(true);
       setStatus('connected');
       reconnectAttempts.current = 0;
       lastPongTime.current = Date.now();
-      
-      // Send JOIN message with user info
       ws.current.send(JSON.stringify({
         type: 'JOIN',
         username: usernameRef.current,
@@ -259,19 +177,12 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
         profileId: profileId
       }));
       
-      // Start heartbeat interval (every 10 seconds)
-      if (heartbeatInterval.current) {
-        clearInterval(heartbeatInterval.current);
-      }
+      if (heartbeatInterval.current) { clearInterval(heartbeatInterval.current); }
       heartbeatInterval.current = setInterval(() => {
         if (ws.current && ws.current.readyState === WebSocket.OPEN) {
           ws.current.send(JSON.stringify({ type: 'PING' }));
-          
-          // Check if we haven't received a pong in 30 seconds
-          const timeSinceLastPong = Date.now() - lastPongTime.current;
-          if (timeSinceLastPong > 30000) {
-            console.warn('No heartbeat response in 30s, connection may be stale');
-            // Don't close immediately, let the server handle it
+          if (Date.now() - lastPongTime.current > 30000) {
+            console.warn('No heartbeat response');
           }
         }
       }, 10000);
@@ -279,167 +190,57 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
 
     ws.current.onmessage = async (event) => {
       if (event.data instanceof ArrayBuffer) {
-        // Binary audio data - queue for playback
-        console.log(`Received audio data: ${event.data.byteLength} bytes`);
         audioQueue.current.push(event.data);
         processAudioQueue();
       } else if (typeof event.data === 'string') {
-        // JSON control message
         try {
           const data = JSON.parse(event.data);
-          console.log('Control Message:', data);
-          
           handleControlMessage(data);
-        } catch (err) {
-          console.error('Failed to parse message:', err);
-        }
+        } catch (err) {}
       }
     };
 
-    ws.current.onerror = (err) => {
-      console.error('WebSocket Error:', err);
-      // Don't set error status immediately, let onclose handle reconnection
-      if (reconnectAttempts.current >= maxReconnectAttempts) {
-        setStatus('error');
-      }
-    };
-
-    ws.current.onclose = (event) => {
-      console.log('WebSocket Closed:', event.code, event.reason);
+    ws.current.onclose = () => {
       setIsConnected(false);
-      
-      // Attempt reconnection only if we should
       if (shouldReconnect.current && reconnectAttempts.current < maxReconnectAttempts) {
         reconnectAttempts.current++;
-        console.log(`Reconnecting... Attempt ${reconnectAttempts.current}`);
         setStatus('reconnecting');
         setTimeout(connect, 2000);
-      } else if (reconnectAttempts.current >= maxReconnectAttempts) {
-        setStatus('error');
       } else {
         setStatus('disconnected');
       }
     };
   }, [roomId, userId, profileId, isAgent, processAudioQueue, handleControlMessage]);
 
-  // Disconnect from WebSocket
   const disconnect = useCallback(() => {
-    console.log('Disconnecting WebSocket...');
     shouldReconnect.current = false;
-    
-    // Clear heartbeat interval
-    if (heartbeatInterval.current) {
-      clearInterval(heartbeatInterval.current);
-      heartbeatInterval.current = null;
-    }
-    
-    // Send LEAVE message before closing
+    if (heartbeatInterval.current) { clearInterval(heartbeatInterval.current); }
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      ws.current.send(JSON.stringify({
-        type: 'LEAVE',
-        username: usernameRef.current
-      }));
+      ws.current.send(JSON.stringify({ type: 'LEAVE', username: usernameRef.current }));
     }
-    
-    // Close WebSocket
-    if (ws.current) {
-      ws.current.close(1000, 'User left');
-      ws.current = null;
-    }
-    
-    // Close audio context
-    if (audioContext.current) {
-      audioContext.current.close();
-      audioContext.current = null;
-    }
-    
-    // Clear audio queue
+    if (ws.current) { ws.current.close(); ws.current = null; }
     audioQueue.current = [];
-    isPlaying.current = false;
     nextPlayTime.current = 0;
-    
-    // Reset state
     setIsConnected(false);
-    setPartnerJoined(false);
     setStatus('disconnected');
   }, []);
 
-  // Send audio chunk with VAD state
-  const sendAudio = useCallback((audioBuffer, isSpeaking = true) => {
-    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      // Send as binary for efficiency
-      console.log(`Sending audio: ${audioBuffer.byteLength} bytes, speaking: ${isSpeaking}`);
-      ws.current.send(audioBuffer);
-    } else {
-      console.log(`Cannot send audio: ws=${!!ws.current}, readyState=${ws.current?.readyState}`);
-    }
-  }, []);
-
-  // Send audio with VAD metadata (JSON format)
-  const sendAudioWithVAD = useCallback((audioBuffer, isSpeaking) => {
-    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      // Convert ArrayBuffer to base64
-      const bytes = new Uint8Array(audioBuffer);
-      let binary = '';
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const base64Audio = btoa(binary);
-      
-      ws.current.send(JSON.stringify({
-        type: 'AUDIO_WITH_VAD',
-        audio: base64Audio,
-        speaking: isSpeaking,
-        timestamp: Date.now()
-      }));
-    }
-  }, []);
-
-  // Update language preference
-  const updateLanguage = useCallback((newLanguage) => {
-    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      ws.current.send(JSON.stringify({
-        type: 'LANGUAGE_UPDATE',
-        language: newLanguage
-      }));
-    }
-  }, []);
-
-  // Send mute state
-  const sendMuteState = useCallback((isMuted) => {
-    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      ws.current.send(JSON.stringify({
-        type: 'MUTE',
-        muted: isMuted
-      }));
-    }
-  }, []);
-
-  // Connect on mount
   useEffect(() => {
     shouldReconnect.current = true;
     connect();
-    
-    return () => {
-      disconnect();
-    };
+    return () => { disconnect(); };
   }, [connect, disconnect]);
 
-  // Resume audio context on user interaction
-  useEffect(() => {
-    const resumeAudio = () => {
-      if (audioContext.current && audioContext.current.state === 'suspended') {
-        audioContext.current.resume();
-      }
-    };
-    
-    document.addEventListener('click', resumeAudio);
-    document.addEventListener('keydown', resumeAudio);
-    
-    return () => {
-      document.removeEventListener('click', resumeAudio);
-      document.removeEventListener('keydown', resumeAudio);
-    };
+  const sendAudio = useCallback((audioBuffer, isSpeaking = true) => {
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      ws.current.send(audioBuffer);
+    }
+  }, []);
+
+  const updateLanguage = useCallback((newLanguage) => {
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      ws.current.send(JSON.stringify({ type: 'LANGUAGE_UPDATE', language: newLanguage }));
+    }
   }, []);
 
   return { 
@@ -452,9 +253,7 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
     partnerStatus,
     listeningToName,
     sendAudio,
-    sendAudioWithVAD,
     updateLanguage,
-    sendMuteState,
     disconnect
   };
 };

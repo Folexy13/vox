@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Video, Keyboard, Plus, Sparkles, MessageSquare, Zap, Globe } from 'lucide-react';
 import Modal from '../components/Modal';
+import { useGlobalAudio } from '../context/AudioContext';
 
 const Home = () => {
   const [roomCode, setRoomCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState({ isOpen: false, type: 'info', title: '', message: '' });
   const navigate = useNavigate();
+  const { unlock } = useGlobalAudio();
 
   const showModal = (type, title, message) => {
     setModal({ isOpen: true, type, title, message });
@@ -100,8 +102,11 @@ const Home = () => {
           </p>
           
           <div className="flex flex-col space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4 pt-4">
-            <button 
-              onClick={() => navigate('/agent/' + Math.random().toString(36).substring(7))}
+            <button
+              onClick={async () => {
+                await unlock();
+                navigate('/agent/' + Math.random().toString(36).substring(7));
+              }}
               className="group relative flex items-center justify-center bg-gradient-to-br from-google-yellow to-orange-500 text-black px-10 py-5 rounded-2xl font-black text-lg transition-all hover:scale-105 active:scale-95 shadow-[0_0_40px_rgba(251,188,4,0.3)]"
             >
               <Sparkles className="w-6 h-6 mr-3 fill-black animate-spin-slow" />
@@ -109,8 +114,11 @@ const Home = () => {
               <div className="absolute inset-0 rounded-2xl bg-white opacity-0 group-hover:opacity-20 transition-opacity" />
             </button>
 
-            <button 
-              onClick={handleStartCall}
+            <button
+              onClick={async () => {
+                await unlock();
+                handleStartCall();
+              }}
               disabled={loading}
               className="flex items-center justify-center bg-white/5 border border-white/10 hover:bg-white/10 text-white px-8 py-5 rounded-2xl font-bold text-lg transition-all hover:scale-105 active:scale-95 backdrop-blur-xl"
             >
