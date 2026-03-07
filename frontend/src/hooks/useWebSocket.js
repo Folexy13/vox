@@ -60,8 +60,6 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
       // - Meeting mode: Backend resamples to 16kHz before sending to partner
       const sampleRate = isAgent ? 24000 : 16000;
       
-      console.log(`Playing audio: ${audioData.byteLength} bytes at ${sampleRate}Hz, context state: ${ctx.state}`);
-      
       // Create gain node once and reuse
       if (!gainNode.current) {
         gainNode.current = ctx.createGain();
@@ -71,6 +69,8 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
       
       // Ensure we have an even number of bytes for Int16Array
       const safeLength = Math.floor(audioData.byteLength / 2) * 2;
+      if (safeLength === 0) return;
+      
       const int16Data = new Int16Array(audioData.slice(0, safeLength));
       
       // Convert Int16 to Float32 for Web Audio API
@@ -84,8 +84,10 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
       buffer.getChannelData(0).set(float32Data);
       
       const currentTime = ctx.currentTime;
-      if (nextPlayTime.current < currentTime) {
-        nextPlayTime.current = currentTime;
+      // Add a small buffer (50ms) to prevent audio gaps
+      const bufferTime = 0.05;
+      if (nextPlayTime.current < currentTime + bufferTime) {
+        nextPlayTime.current = currentTime + bufferTime;
       }
       
       const source = ctx.createBufferSource();

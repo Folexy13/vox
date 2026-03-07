@@ -318,18 +318,19 @@ async def agent_websocket_endpoint(websocket: WebSocket, user_id: str):
             ROOMS["agent_room"][user_id]["task"] = task
             runner = PipelineRunner()
             
-            # Make the bot speak first!
-            @task.event_handler("on_pipeline_started")
-            async def on_pipeline_started(task, frame):
-                # Trigger the greeting by sending a message to the LLM
-                # We use run_llm=True to force immediate inference
-                msg = [
-                    {"role": "user", "content": "I have just connected. Introduce yourself as Voxa, and ask for my name."}
-                ]
-                await task.queue_frames([LLMMessagesAppendFrame(messages=msg, run_llm=True)])
-
             # Send READY signal to frontend
             await websocket.send_json({"type": "READY", "partnerName": "Vox AI", "partnerLanguage": current_lang})
+            
+            # Trigger greeting after a short delay to ensure pipeline is ready
+            async def trigger_greeting():
+                await asyncio.sleep(0.5)  # Wait for pipeline to initialize
+                logger.info(f"Triggering greeting in {lang_name}")
+                greeting_msg = [
+                    {"role": "user", "content": f"I have just connected. Introduce yourself as Voxa in {lang_name}, and ask for my name."}
+                ]
+                await task.queue_frames([LLMMessagesAppendFrame(messages=greeting_msg, run_llm=True)])
+            
+            asyncio.create_task(trigger_greeting())
             
             await runner.run(task)
             logger.info(f"Agent pipeline loop for {user_id} (restart for lang/name change)")
