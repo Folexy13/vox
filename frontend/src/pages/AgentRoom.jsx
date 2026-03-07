@@ -127,10 +127,11 @@ const AgentRoom = () => {
 
   // Handle audio from capture
   const handleAudioChunk = useCallback((audioBuffer, isSpeaking) => {
-    if (micOn && isConnected) {
+    // Only send audio when status is active (READY received), otherwise backend receives binary before JSON
+    if (micOn && status === 'active') {
       sendAudio(audioBuffer, isSpeaking);
     }
-  }, [micOn, isConnected, sendAudio]);
+  }, [micOn, status, sendAudio]);
 
   const { isSpeaking, isCapturing, stopCapture } = useAudioCapture(handleAudioChunk, micOn);
 

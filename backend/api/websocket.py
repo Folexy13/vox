@@ -36,17 +36,7 @@ class RawBinarySerializer(FrameSerializer):
             try:
                 msg = json.loads(data)
                 
-                # Handle JOIN message inside the pipeline to avoid async race conditions
-                if msg.get("type") == "JOIN":
-                    logger.info(f"Received JOIN in serializer for {self.user_id}")
-                    if self.room_id in ROOMS and self.user_id in ROOMS[self.room_id]:
-                        ROOMS[self.room_id][self.user_id]["name"] = msg.get("username", "Guest")
-                        ROOMS[self.room_id][self.user_id]["language"] = msg.get("language", "en-US")
-                        # Trigger pipeline restart to apply the name/lang immediately
-                        if "task" in ROOMS[self.room_id][self.user_id]:
-                            asyncio.create_task(ROOMS[self.room_id][self.user_id]["task"].queue_frame(CancelTaskFrame()))
-
-                elif msg.get("type") == "LANGUAGE_UPDATE":
+                if msg.get("type") == "LANGUAGE_UPDATE":
                     new_lang = msg.get("language")
                     logger.info(f"User {self.user_id} changed language to {new_lang}")
                     
@@ -181,12 +171,25 @@ async def agent_websocket_endpoint(websocket: WebSocket, user_id: str):
     await websocket.accept()
     logger.info(f"User {user_id} started an Agent session")
 
-    # Register the agent user immediately
+    user_name = "Guest"
+    user_lang = "en-US"
+    try:
+        # Wait for the initial JOIN message BEFORE Pipecat takes over the websocket.
+        # The frontend is now configured to wait for READY before sending binary audio,
+        # so this receive_json() will successfully intercept the text frame without crashing.
+        data = await asyncio.wait_for(websocket.receive_json(), timeout=5.0)
+        if data.get("type") == "JOIN":
+            user_name = data.get("username", "Guest")
+            user_lang = data.get("language", "en-US")
+    except Exception as e:
+        logger.warning(f"Could not receive JOIN message: {e}")
+
+    # Register the agent user
     ROOMS["agent_room"] = ROOMS.get("agent_room", {})
     ROOMS["agent_room"][user_id] = {
         "websocket": websocket,
-        "name": "Guest",
-        "language": "en-US"
+        "name": user_name,
+        "language": user_lang
     }
 
     try:
@@ -269,13 +272,23 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
     await websocket.accept()
     logger.info(f"User {user_id} joined room {room_id} over Pipecat WebSocket")
 
+    user_name = "Guest"
+    user_lang = "en-US"
+    try:
+        data = await asyncio.wait_for(websocket.receive_json(), timeout=5.0)
+        if data.get("type") == "JOIN":
+            user_name = data.get("username", "Guest")
+            user_lang = data.get("language", "en-US")
+    except Exception as e:
+        logger.warning(f"Could not receive JOIN message: {e}")
+
     if room_id not in ROOMS:
         ROOMS[room_id] = {}
         
     ROOMS[room_id][user_id] = {
         "websocket": websocket,
-        "name": "Guest",
-        "language": "en-US"
+        "name": user_name,
+        "language": user_lang
     }
 
     # When a second person joins, send READY signal to both
