@@ -39,7 +39,7 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
     if (!audioContext.current) {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (AudioContextClass) {
-        audioContext.current = new AudioContextClass({ sampleRate: 16000 });
+        audioContext.current = new AudioContextClass();
       }
     }
     // Resume if suspended (browser autoplay policy)
@@ -94,11 +94,11 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
       // Convert Int16 to Float32 for Web Audio API
       const float32Data = new Float32Array(int16Data.length);
       for (let i = 0; i < int16Data.length; i++) {
-        float32Data[i] = int16Data[i] / 32768.0;
+        float32Data[i] = int16Data[i] / (int16Data[i] < 0 ? 0x8000 : 0x7fff);
       }
       
-      // Create audio buffer (Cartesia streams at 16000 Hz)
-      const buffer = ctx.createBuffer(1, float32Data.length, 16000);
+      // Create audio buffer (Gemini natively streams at 24000 Hz)
+      const buffer = ctx.createBuffer(1, float32Data.length, 24000);
       buffer.getChannelData(0).set(float32Data);
       
       // Calculate when to play this chunk
