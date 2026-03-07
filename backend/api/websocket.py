@@ -177,6 +177,73 @@ class RouteToPartnerProcessor(FrameProcessor):
         await self.push_frame(frame, direction)
 
 
+@router.websocket("/ws/agent/{user_id}")
+async def agent_websocket_endpoint(websocket: WebSocket, user_id: str):
+    await websocket.accept()
+    logger.info(f"User {user_id} started an Agent session")
+
+    user_name = "Guest"
+    try:
+        data = await asyncio.wait_for(websocket.receive_json(), timeout=2.0)
+        if data.get("type") == "JOIN":
+            user_name = data.get("username", "Guest")
+    except Exception as e:
+        logger.warning(f"Could not receive JOIN message: {e}")
+
+    try:
+        # For agent mode, we DO want audio_out_enabled=True so the AI talks back to the user!
+        transport = FastAPIWebsocketTransport(
+            websocket=websocket,
+            params=FastAPIWebsocketParams(
+                audio_in_enabled=True,
+                audio_in_filter=RNNoiseFilter(),
+                audio_out_enabled=True,
+                add_wav_header=False,
+                vad_analyzer=SileroVADAnalyzer(params=VADParams(min_volume=0.45, stop_secs=0.8)),
+                serializer=RawBinarySerializer("agent_room", user_id)
+            )
+        )
+
+        gemini_params = InputParams(
+            thinking=ThinkingConfig(thinking_budget=0),
+            vad=GeminiVADParams(
+                prefix_padding_ms=150,
+                silence_duration_ms=700
+            )
+        )
+
+        llm_service = GeminiLiveLLMService(
+            api_key=os.getenv("GOOGLE_API_KEY", ""),
+            model="gemini-2.5-flash-native-audio-latest",
+            voice_id="Puck",
+            system_instruction=(
+                f"You are Vox, an empathetic, highly intelligent AI companion. "
+                f"You are talking to a user named {user_name}. "
+                f"Have a natural, friendly, and engaging conversation with them. "
+                f"You can discuss life issues, brainstorm ideas, give advice, or just chat. "
+                f"Keep your responses concise and natural, like a real human speaking on the phone."
+            ),
+            params=gemini_params
+        )
+
+        pipeline = Pipeline([
+            transport.input(),
+            llm_service,
+            transport.output()
+        ])
+
+        task = PipelineTask(pipeline)
+        runner = PipelineRunner()
+        
+        await websocket.send_json({"type": "READY", "partnerName": "Vox AI", "partnerLanguage": "en-US"})
+        
+        await runner.run(task)
+
+    except WebSocketDisconnect:
+        logger.info(f"Agent session ended for user {user_id}")
+    except Exception as e:
+        logger.error(f"Error in agent pipeline: {e}")
+
 @router.websocket("/ws/{room_id}/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
     await websocket.accept()
@@ -270,8 +337,26 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
         while True:
             # Re-read partner language dynamically for this pipeline iteration
             partner_data = next((u for k, u in ROOMS[room_id].items() if k != user_id), None)
-            target_language = partner_data["language"] if partner_data else "en-US"
-            logger.info(f"Initializing AI for user {user_id} with target language: {target_language}")
+            target_language_code = partner_data["language"] if partner_data else "en-US"
+            
+            # Map code to full language name so Gemini actually understands it!
+            LANGUAGE_MAP = {
+                "en-US": "American English",
+                "en-GB": "British English",
+                "en-NG": "Nigerian English",
+                "fr-FR": "French",
+                "es-ES": "Spanish",
+                "pt-BR": "Portuguese",
+                "de-DE": "German",
+                "yo-NG": "Yoruba",
+                "ig-NG": "Igbo",
+                "ha-NG": "Hausa",
+                "zh-CN": "Mandarin Chinese",
+                "ar-SA": "Arabic"
+            }
+            target_language_name = LANGUAGE_MAP.get(target_language_code, target_language_code)
+            
+            logger.info(f"Initializing AI for user {user_id} with target language: {target_language_name} ({target_language_code})")
 
             gemini_params = InputParams(
                 thinking=ThinkingConfig(thinking_budget=0),
@@ -292,7 +377,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                 system_instruction=(
                     f"You are a pure real-time voice translator. You MUST NEVER act as a chatbot. "
                     f"You MUST NEVER answer questions or converse with the user. "
-                    f"Your ONLY function is to listen to the user and immediately output the direct translation in {target_language}. "
+                    f"Your ONLY function is to listen to the user and immediately output the direct translation in {target_language_name}. "
                     f"If the user asks a question, translate the question. Do not answer it. "
                     f"Do not summarize, do not add introductory phrases like 'Okay', just speak the translation natively and quickly."
                 ),

@@ -218,7 +218,9 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
     // Convert http/https to ws/wss
     const wsProtocol = backendUrl.startsWith('https') ? 'wss:' : 'ws:';
     const backendHost = backendUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
-    const wsUrl = `${wsProtocol}//${backendHost}/ws/${roomId}/${userId}`;
+    const wsUrl = isAgent
+      ? `${wsProtocol}//${backendHost}/ws/agent/${userId}`
+      : `${wsProtocol}//${backendHost}/ws/${roomId}/${userId}`;
     
     console.log(`Connecting to ${wsUrl} as ${usernameRef.current}`);
     setStatus('connecting');
