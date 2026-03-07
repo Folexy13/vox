@@ -52,6 +52,9 @@ const AgentRoom = () => {
   const [copySuccess, setCopySuccess] = useState(false);
   const [modal, setModal] = useState({ isOpen: false, type: 'info', title: '', message: '' });
   
+  // Audio context unlock state
+  const [sessionStarted, setSessionStarted] = useState(false);
+
   // App state from useWebSocket
   const [showLanguagePicker, setShowLanguagePicker] = useState(false);
   const [currentLanguage, setCurrentLanguage] = useState(userLanguage);
@@ -91,18 +94,28 @@ const AgentRoom = () => {
   }, []);
 
   // WebSocket connection
-  const { 
-    isConnected, 
-    partnerJoined, 
-    partnerName, 
-    partnerLanguage,
+  // We only initialize the websocket hook AFTER the user clicks to start the session.
+  // This guarantees the browser's AudioContext is created during a valid user interaction,
+  // completely eliminating the "I can't hear anything" Autoplay block!
+  const wsResult = useWebSocket(
+    sessionStarted ? roomId : null,
+    userId,
+    userName,
+    userLanguageCode,
+    profileId,
+    addTranscript,
+    true
+  );
+
+  const {
+    isConnected,
+    partnerJoined,
     status,
     partnerStatus,
-    listeningToName,
     sendAudio,
     updateLanguage,
     disconnect
-  } = useWebSocket(roomId, userId, userName, userLanguageCode, profileId, addTranscript, true);
+  } = wsResult || {};
 
   // Redirect if joined directly without setup
   useEffect(() => {
@@ -154,6 +167,33 @@ const AgentRoom = () => {
   };
 
   if (!userName || !currentLanguage) return <LoadingSpinner fullScreen message="Initializing neural link..." />;
+
+  if (!sessionStarted) {
+    return (
+      <div className="h-screen w-full bg-[#050505] flex flex-col items-center justify-center overflow-hidden text-white font-sans relative">
+        <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] bg-google-blue/10 rounded-full blur-[120px] animate-pulse" />
+        
+        <div className="z-10 flex flex-col items-center max-w-md text-center p-8 bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[3rem] shadow-2xl">
+          <div className="bg-gradient-to-br from-google-blue to-blue-600 p-4 rounded-3xl mb-8 shadow-[0_0_40px_rgba(26,115,232,0.3)]">
+            <Sparkles className="w-10 h-10 text-white animate-pulse" />
+          </div>
+          
+          <h2 className="text-3xl font-black mb-4">Voxa is waiting...</h2>
+          <p className="text-gray-400 mb-10 leading-relaxed">
+            Your highly-intelligent AI companion is ready to speak with you. Click below to establish the neural audio link.
+          </p>
+          
+          <button
+            onClick={() => setSessionStarted(true)}
+            className="w-full group relative flex items-center justify-center bg-white text-black px-8 py-5 rounded-2xl font-black text-lg transition-all hover:scale-105 active:scale-95 shadow-[0_0_40px_rgba(255,255,255,0.2)]"
+          >
+            ESTABLISH AUDIO LINK
+            <div className="absolute inset-0 rounded-2xl bg-black opacity-0 group-hover:opacity-10 transition-opacity" />
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen w-full bg-[#050505] flex flex-col overflow-hidden text-white font-sans selection:bg-google-blue/30">

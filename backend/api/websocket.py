@@ -86,6 +86,60 @@ class DropGeminiAudioProcessor(FrameProcessor):
         
         await self.push_frame(frame, direction)
 
+class AgentTranscriptProcessor(FrameProcessor):
+    def __init__(self, websocket: WebSocket):
+        super().__init__()
+        self.websocket = websocket
+        self.current_text = ""
+        self.last_text_chunk = None
+
+    async def process_frame(self, frame, direction):
+        await super().process_frame(frame, direction)
+        
+        if isinstance(frame, TranscriptionFrame):
+            text_said = frame.text.strip()
+            if text_said and getattr(frame, 'finalized', True):
+                try:
+                    await self.websocket.send_json({
+                        "type": "TRANSCRIPT",
+                        "original": text_said,
+                        "translated": "",
+                        "isUser": True,
+                        "sourceLanguage": "auto",
+                        "targetLanguage": "auto",
+                        "confidence": 1.0,
+                        "emotionPreserved": True
+                    })
+                except:
+                    pass
+                    
+        elif isinstance(frame, TextFrame):
+            if frame.text != self.last_text_chunk:
+                self.current_text += frame.text
+                self.last_text_chunk = frame.text
+                
+        elif isinstance(frame, LLMFullResponseEndFrame):
+            final_text = self.current_text.strip()
+            if final_text:
+                try:
+                    await self.websocket.send_json({
+                        "type": "TRANSCRIPT",
+                        "original": "",
+                        "translated": final_text,
+                        "isUser": False,
+                        "sourceLanguage": "auto",
+                        "targetLanguage": "auto",
+                        "confidence": 1.0,
+                        "emotionPreserved": True
+                    })
+                except:
+                    pass
+                self.current_text = ""
+                self.last_text_chunk = None
+                
+        await self.push_frame(frame, direction)
+
+
 class RouteToPartnerProcessor(FrameProcessor):
     def __init__(self, room_id: str, user_id: str):
         super().__init__()
@@ -259,7 +313,8 @@ async def agent_websocket_endpoint(websocket: WebSocket, user_id: str):
                 )
             )
 
-            pipeline = Pipeline([transport.input(), llm_service, transport.output()])
+            agent_transcript = AgentTranscriptProcessor(websocket)
+            pipeline = Pipeline([transport.input(), llm_service, agent_transcript, transport.output()])
             task = PipelineTask(pipeline, params=PipelineParams(allow_interruptions=True, enable_metrics=False))
             
             ROOMS["agent_room"][user_id]["task"] = task
