@@ -390,9 +390,25 @@ async def agent_websocket_endpoint(websocket: WebSocket, user_id: str):
             async def initialize_agent():
                 nonlocal ready_sent, greeting_sent, inactivity_task
                 
-                # Wait for Gemini service to connect (poll for connection)
-                # The service logs "Connected to Gemini service" when ready
-                await asyncio.sleep(6.0)  # Wait for Gemini to fully connect
+                # Poll for Gemini connection - check if the service has a connected session
+                # The service sets _session when connected
+                max_wait = 30  # Maximum 30 seconds to wait
+                poll_interval = 0.5  # Check every 500ms
+                waited = 0
+                
+                while waited < max_wait:
+                    await asyncio.sleep(poll_interval)
+                    waited += poll_interval
+                    
+                    # Check if Gemini service has an active session (indicates connection)
+                    if hasattr(llm_service, '_session') and llm_service._session is not None:
+                        logger.info(f"Gemini connected after {waited:.1f}s")
+                        break
+                else:
+                    logger.warning(f"Gemini connection timeout after {max_wait}s, proceeding anyway")
+                
+                # Add a small extra delay to ensure everything is ready
+                await asyncio.sleep(0.5)
                 
                 if not ready_sent:
                     ready_sent = True
