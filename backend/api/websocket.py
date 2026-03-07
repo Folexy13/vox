@@ -59,16 +59,7 @@ class RawBinarySerializer(FrameSerializer):
     
     async def serialize(self, frame):
         if isinstance(frame, TTSAudioRawFrame):
-            audio_to_send = frame.audio
-            # Ensure the frontend gets exactly 16kHz PCM16, as it expects
-            if getattr(frame, "sample_rate", 24000) != 16000:
-                try:
-                    audio_to_send, self.ratecv_state = audioop.ratecv(
-                        frame.audio, 2, 1, getattr(frame, "sample_rate", 24000), 16000, self.ratecv_state
-                    )
-                except Exception as e:
-                    logger.error(f"Serializer resample error: {e}")
-            return audio_to_send
+            return frame.audio
         return None
 
 class DropGeminiAudioProcessor(FrameProcessor):
