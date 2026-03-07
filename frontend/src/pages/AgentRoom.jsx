@@ -22,12 +22,27 @@ const AgentRoom = () => {
   
   // Get user info from state or sessionStorage (for rejoining)
   const sessionKey = `vox_room_${roomId}`;
-  const storedSession = JSON.parse(sessionStorage.getItem(sessionKey) || '{}');
   
-  const userId = state?.userId || storedSession?.userId || `user_${Math.random().toString(36).substring(7)}`;
-  const userName = state?.userName || storedSession?.userName || 'Guest';
-  const userLanguage = state?.userLanguage || storedSession?.userLanguage || 'American English';
-  const profileId = state?.profileId || storedSession?.profileId || null;
+  // Prevent infinite re-renders by using lazy initialization for variables that use Math.random()
+  const [userId] = useState(() => {
+    const storedSession = JSON.parse(sessionStorage.getItem(sessionKey) || '{}');
+    return state?.userId || storedSession?.userId || `user_${Math.random().toString(36).substring(7)}`;
+  });
+  
+  const [userName] = useState(() => {
+    const storedSession = JSON.parse(sessionStorage.getItem(sessionKey) || '{}');
+    return state?.userName || storedSession?.userName || 'Guest';
+  });
+  
+  const [userLanguage] = useState(() => {
+    const storedSession = JSON.parse(sessionStorage.getItem(sessionKey) || '{}');
+    return state?.userLanguage || storedSession?.userLanguage || 'American English';
+  });
+  
+  const [profileId] = useState(() => {
+    const storedSession = JSON.parse(sessionStorage.getItem(sessionKey) || '{}');
+    return state?.profileId || storedSession?.profileId || null;
+  });
 
   // UI State
   const [micOn, setMicOn] = useState(true);

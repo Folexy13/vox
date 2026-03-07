@@ -1,4 +1,10 @@
-import os
+import re
+
+with open('backend/api/websocket.py', 'r') as f:
+    content = f.read()
+
+# Define the full desired content of backend/api/websocket.py
+full_content = """import os
 import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from loguru import logger
@@ -382,3 +388,7 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
                 except: pass
     except Exception as e:
         logger.error(f"Error in pipecat pipeline for user {user_id}: {e}")
+"""
+
+with open('backend/api/websocket.py', 'w') as f:
+    f.write(full_content)

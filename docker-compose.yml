@@ -8,6 +8,9 @@ services:
     environment:
       - GOOGLE_APPLICATION_CREDENTIALS=/app/service_account.json
       - USE_CARTESIA=false
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     volumes:
       - ./backend/service_account.json:/app/service_account.json:ro
     depends_on:
