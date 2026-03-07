@@ -18,7 +18,6 @@ Two people join a call. Each speaks naturally in their own language and accent. 
 
 - 🗣️ **Real-time Translation** — No turn-taking, natural conversation flow
 - 🎯 **Interruption Handling** — Speak over each other naturally, just like a real call
-- 🇳🇬 **Nigerian Language Support** — Yoruba, Igbo, Hausa (unique differentiator!)
 - 😊 **Emotion Detection** — Preserves emotional tone in translations
 - 🎤 **Voice Cloning** — Hear translations in the speaker's own voice
 - 📝 **Live Transcripts** — See original and translated text in real-time
@@ -162,13 +161,16 @@ vox/
 ---
 
 ## 🌍 Supported Languages
+*(Native Google Gemini Multimodal Live Support)*
 
 | Language | Code | Status |
 |----------|------|--------|
 | English (US) | en-US | ✅ Full support |
 | English (UK) | en-GB | ✅ Full support |
-| English (Nigerian) | en-NG | ✅ Full support |
-| **Yoruba** | yo-NG | ✅ **Differentiator** |
+| French | fr-FR | ✅ Full support |
+| Spanish | es-ES | ✅ Full support |
+| Portuguese | pt-BR | ✅ Full support |
+| German | de-DE | ✅ Full support |
 | **Igbo** | ig-NG | ✅ **Differentiator** |
 | **Hausa** | ha-NG | ✅ **Differentiator** |
 | French | fr-FR | ✅ Full support |
@@ -206,11 +208,8 @@ Turn on Vox. Watch accents get clarified. Show emotion badges changing.
 ### 1:30 - 2:00: Interruption Demo ⭐
 Person A speaks. Person B interrupts. Vox switches instantly. **This is the key demo moment.**
 
-### 2:00 - 2:45: Cross-Language Demo
-French ↔ English translation. Show live transcript panel.
-
-### 2:45 - 3:15: Nigerian Language Demo
-Yoruba ↔ English. **Unique differentiator.**
+### 2:00 - 3:15: Cross-Language Demo
+French ↔ English and Spanish ↔ English translation. Show live transcript panel.
 
 ### 3:15 - 3:45: Architecture + Cloud Proof
 Show GCP console with running service.

@@ -5,16 +5,17 @@ from loguru import logger
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.task import PipelineTask, PipelineParams
 from pipecat.pipeline.runner import PipelineRunner
-from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.audio.vad.silero import SileroVADAnalyzer, VADParams
 from pipecat.services.google.gemini_live.llm import GeminiLiveLLMService, InputParams, GeminiModalities, GeminiVADParams
 from google.genai.types import ThinkingConfig
 from pipecat.audio.filters.rnnoise_filter import RNNoiseFilter
 from pipecat.transports.websocket.fastapi import FastAPIWebsocketTransport, FastAPIWebsocketParams
 from pipecat.services.cartesia import CartesiaTTSService
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
-from pipecat.frames.frames import TTSAudioRawFrame, TextFrame, LLMFullResponseEndFrame, InputAudioRawFrame, TranscriptionFrame, LLMMessagesAppendFrame
+from pipecat.frames.frames import TTSAudioRawFrame, TextFrame, LLMFullResponseEndFrame, InputAudioRawFrame, TranscriptionFrame, LLMMessagesAppendFrame, CancelTaskFrame, CancelTaskFrame
 from pipecat.serializers.base_serializer import FrameSerializer
 import json
+import audioop
 
 router = APIRouter()
 
@@ -41,14 +42,24 @@ class RawBinarySerializer(FrameSerializer):
                     if self.room_id in ROOMS and self.user_id in ROOMS[self.room_id]:
                         ROOMS[self.room_id][self.user_id]["language"] = new_lang
                         
-                    # Tell the partner's pipeline to update target language
+                    # Restart partner's pipeline to apply the new language
                     room = ROOMS.get(self.room_id, {})
                     for uid, user_data in room.items():
                         if uid != self.user_id and "task" in user_data:
-                            prompt_update = LLMMessagesAppendFrame([
-                                {"role": "system", "content": f"System update: The target language is now {new_lang}. DO NOT acknowledge this update. DO NOT re-translate previous sentences. Silently apply this new language to all future translations."}
-                            ])
-                            await user_data["task"].queue_frame(prompt_update)
+                            try:
+                                import asyncio
+                                asyncio.create_task(user_data["task"].queue_frame(CancelTaskFrame()))
+                            except:
+                                pass
+                    
+                    # Restart partner's pipeline to apply the new language
+                    room = ROOMS.get(self.room_id, {})
+                    for uid, user_data in room.items():
+                        if uid != self.user_id and "task" in user_data:
+                            try:
+                                asyncio.create_task(user_data["task"].queue_frame(CancelTaskFrame()))
+                            except:
+                                pass
             except Exception as e:
                 logger.error(f"JSON intercept error: {e}")
         return None
@@ -57,8 +68,6 @@ class RawBinarySerializer(FrameSerializer):
         if isinstance(frame, TTSAudioRawFrame):
             return frame.audio
         return None
-
-import audioop
 
 class DropGeminiAudioProcessor(FrameProcessor):
     def __init__(self, room_id: str, user_id: str):
@@ -81,17 +90,29 @@ class RouteToPartnerProcessor(FrameProcessor):
         self.room_id = room_id
         self.user_id = user_id
         self.current_text = ""
+        self.ratecv_state = None
 
     async def process_frame(self, frame, direction):
         await super().process_frame(frame, direction)
         
         if isinstance(frame, TTSAudioRawFrame):
+            audio_to_send = frame.audio
+            # If audio is not 16kHz (like Gemini's default 24kHz), we MUST resample
+            # otherwise it sounds slow, deep, and robotic on the 16kHz frontend
+            if getattr(frame, "sample_rate", 24000) != 16000:
+                try:
+                    audio_to_send, self.ratecv_state = audioop.ratecv(
+                        frame.audio, 2, 1, getattr(frame, "sample_rate", 24000), 16000, self.ratecv_state
+                    )
+                except Exception as e:
+                    logger.error(f"Resampling error: {e}")
+
             # Send audio directly to partner(s) in the room
             room = ROOMS.get(self.room_id, {})
             for uid, user_data in room.items():
                 if uid != self.user_id:
                     try:
-                        await user_data["websocket"].send_bytes(frame.audio)
+                        await user_data["websocket"].send_bytes(audio_to_send)
                     except Exception as e:
                         logger.error(f"Failed to route audio to {uid}: {e}")
             # DO NOT yield TTS audio downstream so the speaker doesn't hear themselves
@@ -99,42 +120,50 @@ class RouteToPartnerProcessor(FrameProcessor):
             
         elif isinstance(frame, TranscriptionFrame):
             # Send the original text to the speaker immediately (only finalized)
-            if getattr(frame, "finalized", True):
-                room = ROOMS.get(self.room_id, {})
-                user_data = room.get(self.user_id)
-                if user_data and frame.text.strip():
-                    try:
-                        await user_data["websocket"].send_json({
-                            "type": "TRANSCRIPT",
-                            "original": frame.text,
-                            "translated": "",
-                            "isUser": True,
-                            "sourceLanguage": "auto",
-                            "targetLanguage": "auto",
-                            "confidence": 1.0,
-                            "emotionPreserved": True
-                        })
-                    except Exception as e:
-                        pass
+            text_said = frame.text.strip()
+            if text_said:
+                logger.info(f"🗣️ [User {self.user_id} says] (final={getattr(frame, 'finalized', True)}): {text_said}")
+                if getattr(frame, "finalized", True):
+                    room = ROOMS.get(self.room_id, {})
+                    user_data = room.get(self.user_id)
+                    if user_data:
+                        try:
+                            await user_data["websocket"].send_json({
+                                "type": "TRANSCRIPT",
+                                "original": text_said,
+                                "translated": "",
+                                "isUser": True,
+                                "sourceLanguage": "auto",
+                                "targetLanguage": "auto",
+                                "confidence": 1.0,
+                                "emotionPreserved": True
+                            })
+                        except Exception as e:
+                            logger.error(f"Error sending transcription to speaker: {e}")
                         
         elif isinstance(frame, TextFrame):
-            # Check if Gemini is sending cumulative text instead of deltas
-            if frame.text.startswith(self.current_text) and len(self.current_text) > 0:
-                delta = frame.text[len(self.current_text):]
-                self.current_text = frame.text
-            else:
+            # Pipecat 0.0.104 Gemini implementation has a known bug where it emits
+            # duplicate TextFrames in a row. We filter out exact consecutive duplicates here.
+            if not hasattr(self, "last_text_chunk"):
+                self.last_text_chunk = None
+                
+            if frame.text != self.last_text_chunk:
                 self.current_text += frame.text
+                self.last_text_chunk = frame.text
             
         elif isinstance(frame, LLMFullResponseEndFrame):
-            if self.current_text.strip():
+            self.last_text_chunk = None
+            final_translation = self.current_text.strip()
+            if final_translation:
+                logger.info(f"🎧 [Partner hears from User {self.user_id}]: {final_translation}")
                 room = ROOMS.get(self.room_id, {})
                 for uid, user_data in room.items():
                     if uid != self.user_id:
                         try:
                             await user_data["websocket"].send_json({
                                 "type": "TRANSCRIPT",
-                                "original": "", 
-                                "translated": self.current_text.strip(),
+                                "original": "",
+                                "translated": final_translation,
                                 "isUser": False,
                                 "sourceLanguage": "auto",
                                 "targetLanguage": "auto",
@@ -179,10 +208,6 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
         "profile_id": profile_id
     }
 
-    # Find partner if they exist
-    partner_data = next((u for k, u in ROOMS[room_id].items() if k != user_id), None)
-    target_language = partner_data["language"] if partner_data else "their partner's language"
-
     # When a second person joins, send READY signal to both with actual names
     if len(ROOMS[room_id]) == 2:
         users = list(ROOMS[room_id].values())
@@ -193,95 +218,128 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, user_id: str):
             if other_data:
                 try:
                     await ws.send_json({
-                        "type": "READY", 
-                        "partnerName": other_data["name"], 
+                        "type": "READY",
+                        "partnerName": other_data["name"],
                         "partnerLanguage": other_data["language"]
                     })
                 except:
                     pass
 
+    # Wait for partner to join before starting the AI pipeline
+    # This ensures the AI knows exactly what language to translate to.
+    # We must consume the websocket buffer while waiting so it doesn't freeze.
+    target_language = "en-US"
     try:
-        # Transport receives audio from this user but doesn't output back to them (audio_out_enabled=False)
+        while True:
+            partner_data = next((u for k, u in ROOMS[room_id].items() if k != user_id), None)
+            if partner_data:
+                target_language = partner_data["language"]
+                break
+            
+            # Drain socket while waiting
+            try:
+                msg = await asyncio.wait_for(websocket.receive(), timeout=0.5)
+                # If we get a valid json message during drain, we might want to parse it,
+                # but for simplicity we just discard early audio.
+            except asyncio.TimeoutError:
+                continue
+    except WebSocketDisconnect:
+        logger.info(f"User {user_id} disconnected while waiting for partner")
+        if room_id in ROOMS and user_id in ROOMS[room_id]:
+            del ROOMS[room_id][user_id]
+        return
+
+    logger.info(f"Partner found! Starting pipeline loop for user {user_id}")
+
+    try:
+        use_cartesia = os.getenv("USE_CARTESIA", "false").lower() == "true"
+        
+        # Transport stays open across pipeline restarts
         transport = FastAPIWebsocketTransport(
             websocket=websocket,
             params=FastAPIWebsocketParams(
                 audio_in_enabled=True,
-                audio_in_filter=RNNoiseFilter(), # Clear speech
+                audio_in_filter=RNNoiseFilter(),
                 audio_out_enabled=False,
                 add_wav_header=False,
-                vad_analyzer=SileroVADAnalyzer(),
+                vad_analyzer=SileroVADAnalyzer(params=VADParams(min_volume=0.45, stop_secs=0.8)),
                 serializer=RawBinarySerializer(room_id, user_id)
             )
         )
-        
-        use_cartesia = os.getenv("USE_CARTESIA", "false").lower() == "true"
 
-        # Determine Gemini's internal parameters for ultra low latency
-        gemini_params = InputParams(
-            thinking=ThinkingConfig(thinking_budget=0), # Removes latency
-            vad=GeminiVADParams(
-                prefix_padding_ms=150,
-                silence_duration_ms=300 # Super fast response
+        while True:
+            # Re-read partner language dynamically for this pipeline iteration
+            partner_data = next((u for k, u in ROOMS[room_id].items() if k != user_id), None)
+            target_language = partner_data["language"] if partner_data else "en-US"
+            logger.info(f"Initializing AI for user {user_id} with target language: {target_language}")
+
+            gemini_params = InputParams(
+                thinking=ThinkingConfig(thinking_budget=0),
+                vad=GeminiVADParams(
+                    prefix_padding_ms=150,
+                    silence_duration_ms=700
+                )
             )
-        )
-        if use_cartesia:
-            gemini_params.modalities = GeminiModalities.TEXT
+            # NOTE: We CANNOT set modalities to TEXT because Pipecat 0.0.104 has a bug
+            # where it passes voice_config even for TEXT modalities, crashing the Google API.
+            # Instead, we leave it as AUDIO, let Gemini generate audio, and use DropGeminiAudioProcessor
+            # to quietly throw away Gemini's audio and let Cartesia speak the TextFrames!
 
-        llm_service = GeminiLiveLLMService(
-            api_key=os.getenv("GOOGLE_API_KEY", ""),
-            model="gemini-2.5-flash-native-audio-latest",
-            voice_id="Puck", # Puck is faster and highly expressive/natural
-            system_instruction=(
-                f"You are Vox, a helpful and natural conversational translator. "
-                f"Listen to the user, identify their language, and smoothly translate what they just said into {target_language}. "
-                f"Speak at a brisk, natural human pace. Do not sound robotic. "
-                f"ONLY output the translated message in {target_language}. Do not summarize, do not add introductory phrases, just speak the translation naturally and quickly."
-            ),
-            params=gemini_params
-        )
-
-        router_processor = RouteToPartnerProcessor(room_id, user_id)
-
-        if use_cartesia:
-            # Cartesia TTS setup for ultra-fast, high-quality voice cloning
-            tts_service = CartesiaTTSService(
-                api_key=os.getenv("CARTESIA_API_KEY", "sk_car_C6yXsTuvARZqLQyeHuRK8z"),
-                voice_id=profile_id,
-                sample_rate=24000,
-                aggregate_sentences=False
+            llm_service = GeminiLiveLLMService(
+                api_key=os.getenv("GOOGLE_API_KEY", ""),
+                model="gemini-2.5-flash-native-audio-latest",
+                voice_id="Puck",
+                system_instruction=(
+                    f"You are a pure real-time voice translator. You MUST NEVER act as a chatbot. "
+                    f"You MUST NEVER answer questions or converse with the user. "
+                    f"Your ONLY function is to listen to the user and immediately output the direct translation in {target_language}. "
+                    f"If the user asks a question, translate the question. Do not answer it. "
+                    f"Do not summarize, do not add introductory phrases like 'Okay', just speak the translation natively and quickly."
+                ),
+                params=gemini_params
             )
-            pipeline = Pipeline([
-                transport.input(),
-                llm_service,
-                DropGeminiAudioProcessor(room_id, user_id),
-                tts_service,
-                router_processor,
-                transport.output()
-            ])
-        else:
-            # Gemini Native Audio Pipeline (Ultra-low latency, bypass Cartesia)
-            pipeline = Pipeline([
-                transport.input(),
-                llm_service,
-                # No Cartesia or Audio Dropper needed
-                router_processor,
-                transport.output()
-            ])
 
-        task = PipelineTask(
-            pipeline,
-            params=PipelineParams(
-                allow_interruptions=False, # Disable interruptions so Gemini doesn't cut itself off
-                enable_metrics=True,
-                send_initial_empty_metrics=False
+            router_processor = RouteToPartnerProcessor(room_id, user_id)
+
+            if use_cartesia:
+                tts_service = CartesiaTTSService(
+                    api_key=os.getenv("CARTESIA_API_KEY", "sk_car_C6yXsTuvARZqLQyeHuRK8z"),
+                    voice_id=profile_id,
+                    sample_rate=16000,
+                    aggregate_sentences=True
+                )
+                pipeline = Pipeline([
+                    transport.input(),
+                    llm_service,
+                    DropGeminiAudioProcessor(room_id, user_id),
+                    tts_service,
+                    router_processor,
+                    transport.output()
+                ])
+            else:
+                pipeline = Pipeline([
+                    transport.input(),
+                    llm_service,
+                    router_processor,
+                    transport.output()
+                ])
+
+            task = PipelineTask(
+                pipeline,
+                params=PipelineParams(
+                    allow_interruptions=False,
+                    enable_metrics=False,
+                )
             )
-        )
-        
-        # Store the task in ROOMS so the JSON interceptor can push LLMMessagesAppendFrame if language changes
-        ROOMS[room_id][user_id]["task"] = task
-
-        runner = PipelineRunner()
-        await runner.run(task)
+            
+            ROOMS[room_id][user_id]["task"] = task
+            runner = PipelineRunner()
+            
+            # This blocks until CancelTaskFrame is received or websocket disconnects
+            await runner.run(task)
+            
+            # If we reach here without an exception, it means CancelTaskFrame was sent (language changed)
+            logger.info(f"Pipeline finished for user {user_id}, looping to apply new language...")
 
     except WebSocketDisconnect:
         logger.info(f"User {user_id} disconnected from room {room_id}")

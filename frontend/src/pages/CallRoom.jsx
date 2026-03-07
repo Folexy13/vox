@@ -105,9 +105,9 @@ const CallRoom = () => {
     { name: 'English (UK)', code: 'en-GB', flag: '🇬🇧' },
     { name: 'English (Nigerian)', code: 'en-NG', flag: '🇳🇬' },
     // Nigerian languages - STRATEGIC DIFFERENTIATORS
-    { name: 'Yoruba', code: 'yo-NG', flag: '🇳🇬', highlight: true },
-    { name: 'Igbo', code: 'ig-NG', flag: '🇳🇬', highlight: true },
-    { name: 'Hausa', code: 'ha-NG', flag: '🇳🇬', highlight: true },
+    // { name: 'Yoruba', code: 'yo-NG', flag: '🇳🇬', highlight: true },
+    // { name: 'Igbo', code: 'ig-NG', flag: '🇳🇬', highlight: true },
+    // { name: 'Hausa', code: 'ha-NG', flag: '🇳🇬', highlight: true },
     // European languages
     { name: 'French', code: 'fr-FR', flag: '🇫🇷' },
     { name: 'Spanish', code: 'es-ES', flag: '🇪🇸' },

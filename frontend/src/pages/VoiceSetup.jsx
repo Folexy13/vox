@@ -31,9 +31,9 @@ const VoiceSetup = () => {
     { name: 'English (UK)', code: 'en-GB', test: "The quick brown fox jumps over the lazy dog." },
     { name: 'English (Nigerian)', code: 'en-NG', test: "The quick brown fox jumps over the lazy dog." },
     // Nigerian languages - STRATEGIC DIFFERENTIATORS
-    { name: 'Yoruba', code: 'yo-NG', test: "Ẹ kú àárọ̀, báwo ni ọjọ́ yín ṣe rí?", highlight: true },
-    { name: 'Igbo', code: 'ig-NG', test: "Ụtụtụ ọma, kedu ka ị mere?", highlight: true },
-    { name: 'Hausa', code: 'ha-NG', test: "Ina kwana, yaya aiki?", highlight: true },
+    // { name: 'Yoruba', code: 'yo-NG', test: "Ẹ kú àárọ̀, báwo ni ọjọ́ yín ṣe rí?", highlight: true },
+    // { name: 'Igbo', code: 'ig-NG', test: "Ụtụtụ ọma, kedu ka ị mere?", highlight: true },
+    // { name: 'Hausa', code: 'ha-NG', test: "Ina kwana, yaya aiki?", highlight: true },
     // European languages
     { name: 'French', code: 'fr-FR', test: "Le renard brun rapide saute par-dessus le chien paresseux." },
     { name: 'Spanish', code: 'es-ES', test: "El veloz zorro marrón salta sobre el perro perezoso." },
