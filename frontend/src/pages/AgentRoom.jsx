@@ -108,6 +108,17 @@ const AgentRoom = () => {
     }
   }, [userName, currentLanguage, navigate, roomId]);
 
+  // Handle call ended by agent (e.g., due to inactivity)
+  useEffect(() => {
+    if (status === 'ended') {
+      // Show a message and redirect after a delay
+      const timer = setTimeout(() => {
+        navigate('/');
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [status, navigate]);
+
   // Handle language change
   const handleLanguageChange = useCallback((lang) => {
     setCurrentLanguage(lang.name);

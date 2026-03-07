@@ -237,8 +237,6 @@ async def agent_websocket_endpoint(websocket: WebSocket, user_id: str):
     user_lang = "en-US"
     try:
         # Wait for the initial JOIN message BEFORE Pipecat takes over the websocket.
-        # The frontend is now configured to wait for READY before sending binary audio,
-        # so this receive_json() will successfully intercept the text frame without crashing.
         data = await asyncio.wait_for(websocket.receive_json(), timeout=5.0)
         if data.get("type") == "JOIN":
             user_name = data.get("username", "Guest")
@@ -251,7 +249,10 @@ async def agent_websocket_endpoint(websocket: WebSocket, user_id: str):
     ROOMS["agent_room"][user_id] = {
         "websocket": websocket,
         "name": user_name,
-        "language": user_lang
+        "language": user_lang,
+        "last_user_speech": asyncio.get_event_loop().time(),  # Track last user speech
+        "inactivity_prompts": 0,  # Count of inactivity prompts sent
+        "is_active": True  # Flag to control inactivity checker
     }
 
     try:
@@ -318,29 +319,124 @@ async def agent_websocket_endpoint(websocket: WebSocket, user_id: str):
             ROOMS["agent_room"][user_id]["task"] = task
             runner = PipelineRunner()
             
-            # Send READY signal to frontend
-            await websocket.send_json({"type": "READY", "partnerName": "Vox AI", "partnerLanguage": current_lang})
+            # Track if we've sent READY and greeting
+            ready_sent = False
+            greeting_sent = False
             
-            # Trigger greeting after a short delay to ensure pipeline is ready
-            async def trigger_greeting():
-                await asyncio.sleep(0.5)  # Wait for pipeline to initialize
-                logger.info(f"Triggering greeting in {lang_name}")
-                greeting_msg = [
-                    {"role": "user", "content": f"I have just connected. Introduce yourself as Voxa in {lang_name}, and ask for my name."}
-                ]
-                await task.queue_frames([LLMMessagesAppendFrame(messages=greeting_msg, run_llm=True)])
+            # Inactivity check task
+            inactivity_task = None
             
-            asyncio.create_task(trigger_greeting())
+            async def check_inactivity():
+                """Check for user inactivity and prompt or end call"""
+                INACTIVITY_TIMEOUT = 120  # 2 minutes
+                MAX_PROMPTS = 3
+                
+                while ROOMS.get("agent_room", {}).get(user_id, {}).get("is_active", False):
+                    await asyncio.sleep(10)  # Check every 10 seconds
+                    
+                    user_data = ROOMS.get("agent_room", {}).get(user_id, {})
+                    if not user_data.get("is_active", False):
+                        break
+                    
+                    last_speech = user_data.get("last_user_speech", 0)
+                    current_time = asyncio.get_event_loop().time()
+                    time_since_speech = current_time - last_speech
+                    
+                    if time_since_speech >= INACTIVITY_TIMEOUT:
+                        prompts_sent = user_data.get("inactivity_prompts", 0)
+                        
+                        if prompts_sent >= MAX_PROMPTS:
+                            # End the call after 3 prompts with no response
+                            logger.info(f"Ending call for {user_id} due to inactivity (6 minutes)")
+                            try:
+                                await websocket.send_json({
+                                    "type": "CALL_ENDED",
+                                    "reason": "inactivity",
+                                    "message": "Call ended due to inactivity"
+                                })
+                            except:
+                                pass
+                            # Cancel the task to end the pipeline
+                            await task.queue_frame(CancelTaskFrame())
+                            ROOMS["agent_room"][user_id]["is_active"] = False
+                            break
+                        else:
+                            # Send inactivity prompt
+                            prompts_sent += 1
+                            ROOMS["agent_room"][user_id]["inactivity_prompts"] = prompts_sent
+                            ROOMS["agent_room"][user_id]["last_user_speech"] = current_time  # Reset timer
+                            
+                            prompt_messages = [
+                                "Are you still there? I'm here whenever you're ready to continue.",
+                                "Hello? I haven't heard from you in a while. Is everything okay?",
+                                "I'm still here if you'd like to keep talking. Just say something when you're ready."
+                            ]
+                            prompt = prompt_messages[min(prompts_sent - 1, len(prompt_messages) - 1)]
+                            
+                            logger.info(f"Sending inactivity prompt {prompts_sent} to {user_id}")
+                            inactivity_msg = [
+                                {"role": "user", "content": f"[System: User has been silent for 2 minutes. Ask them: '{prompt}']"}
+                            ]
+                            await task.queue_frames([LLMMessagesAppendFrame(messages=inactivity_msg, run_llm=True)])
             
-            await runner.run(task)
+            # Register event handler for user speech to reset inactivity timer
+            @transport.event_handler("on_user_started_speaking")
+            async def on_user_started_speaking(transport):
+                if user_id in ROOMS.get("agent_room", {}):
+                    ROOMS["agent_room"][user_id]["last_user_speech"] = asyncio.get_event_loop().time()
+                    ROOMS["agent_room"][user_id]["inactivity_prompts"] = 0  # Reset prompt count
+                    logger.debug(f"User {user_id} started speaking, reset inactivity timer")
+            
+            # Wait for Gemini to connect, then send READY and greeting
+            async def initialize_agent():
+                nonlocal ready_sent, greeting_sent, inactivity_task
+                
+                # Wait for Gemini service to connect (poll for connection)
+                # The service logs "Connected to Gemini service" when ready
+                await asyncio.sleep(6.0)  # Wait for Gemini to fully connect
+                
+                if not ready_sent:
+                    ready_sent = True
+                    logger.info(f"Agent ready for {user_id}, sending READY signal")
+                    await websocket.send_json({"type": "READY", "partnerName": "Vox AI", "partnerLanguage": current_lang})
+                
+                if not greeting_sent:
+                    greeting_sent = True
+                    logger.info(f"Triggering greeting in {lang_name}")
+                    greeting_msg = [
+                        {"role": "user", "content": f"I have just connected. Introduce yourself as Voxa in {lang_name}, and ask for my name."}
+                    ]
+                    await task.queue_frames([LLMMessagesAppendFrame(messages=greeting_msg, run_llm=True)])
+                    
+                    # Reset the last speech time after greeting
+                    ROOMS["agent_room"][user_id]["last_user_speech"] = asyncio.get_event_loop().time()
+                    
+                    # Start inactivity checker
+                    inactivity_task = asyncio.create_task(check_inactivity())
+            
+            # Start initialization task
+            init_task = asyncio.create_task(initialize_agent())
+            
+            try:
+                await runner.run(task)
+            finally:
+                # Clean up tasks
+                if inactivity_task and not inactivity_task.done():
+                    inactivity_task.cancel()
+                if not init_task.done():
+                    init_task.cancel()
+            
             logger.info(f"Agent pipeline loop for {user_id} (restart for lang/name change)")
 
     except WebSocketDisconnect:
         logger.info(f"Agent session ended for user {user_id}")
         if "agent_room" in ROOMS and user_id in ROOMS["agent_room"]:
+            ROOMS["agent_room"][user_id]["is_active"] = False
             del ROOMS["agent_room"][user_id]
     except Exception as e:
         logger.error(f"Error in agent pipeline: {e}")
+        if "agent_room" in ROOMS and user_id in ROOMS["agent_room"]:
+            ROOMS["agent_room"][user_id]["is_active"] = False
 
 
 @router.websocket("/ws/{room_id}/{user_id}")

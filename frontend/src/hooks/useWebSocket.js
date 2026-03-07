@@ -153,6 +153,23 @@ export const useWebSocket = (roomId, userId, username, userLanguage = 'en-US', p
       case 'PONG':
         lastPongTime.current = Date.now();
         break;
+      case 'CALL_ENDED':
+        // Agent ended the call (e.g., due to inactivity)
+        console.log('Call ended by agent:', data.reason, data.message);
+        setStatus('ended');
+        setPartnerJoined(false);
+        // Trigger a callback if provided
+        if (onTranscriptRef.current) {
+          onTranscriptRef.current({
+            isUser: false,
+            original: data.message || 'Call ended',
+            translated: data.message || 'Call ended',
+            sourceLanguage: 'system',
+            targetLanguage: 'system',
+            isSystemMessage: true,
+          });
+        }
+        break;
       default:
         break;
     }
