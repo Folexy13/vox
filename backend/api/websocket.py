@@ -83,11 +83,19 @@ class DropGeminiAudioProcessor(FrameProcessor):
         await self.push_frame(frame, direction)
 
 class AgentTranscriptProcessor(FrameProcessor):
-    def __init__(self, websocket: WebSocket):
+    def __init__(self, websocket: WebSocket, room_id: str, user_id: str):
         super().__init__()
         self.websocket = websocket
+        self.room_id = room_id
+        self.user_id = user_id
         self.current_text = ""
         self.last_text_chunk = None
+
+    def _reset_inactivity_timer(self):
+        """Reset the inactivity timer when there's active conversation"""
+        if self.room_id in ROOMS and self.user_id in ROOMS[self.room_id]:
+            ROOMS[self.room_id][self.user_id]["last_user_speech"] = asyncio.get_event_loop().time()
+            ROOMS[self.room_id][self.user_id]["inactivity_prompts"] = 0
 
     async def process_frame(self, frame, direction):
         await super().process_frame(frame, direction)
@@ -95,6 +103,8 @@ class AgentTranscriptProcessor(FrameProcessor):
         if isinstance(frame, TranscriptionFrame):
             text_said = frame.text.strip()
             if text_said and getattr(frame, 'finalized', True):
+                # Reset inactivity timer when user speaks
+                self._reset_inactivity_timer()
                 try:
                     await self.websocket.send_json({
                         "type": "TRANSCRIPT",
@@ -117,6 +127,9 @@ class AgentTranscriptProcessor(FrameProcessor):
         elif isinstance(frame, LLMFullResponseEndFrame):
             final_text = self.current_text.strip()
             if final_text:
+                # Reset inactivity timer when agent finishes responding
+                # This ensures the timer restarts after the agent speaks
+                self._reset_inactivity_timer()
                 try:
                     await self.websocket.send_json({
                         "type": "TRANSCRIPT",
@@ -311,9 +324,10 @@ async def agent_websocket_endpoint(websocket: WebSocket, user_id: str):
                 )
             )
 
-            agent_transcript = AgentTranscriptProcessor(websocket)
+            agent_transcript = AgentTranscriptProcessor(websocket, "agent_room", user_id)
             pipeline = Pipeline([transport.input(), llm_service, agent_transcript, transport.output()])
-            task = PipelineTask(pipeline, params=PipelineParams(allow_interruptions=True, enable_metrics=False))
+            # Disable Pipecat's idle timeout - we handle inactivity ourselves in check_inactivity()
+            task = PipelineTask(pipeline, params=PipelineParams(allow_interruptions=True, enable_metrics=False, idle_timeout_secs=None))
             
             ROOMS["agent_room"][user_id]["task"] = task
             runner = PipelineRunner()
