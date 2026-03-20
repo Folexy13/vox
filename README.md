@@ -226,7 +226,7 @@ Show GCP console with running service.
 GOOGLE_API_KEY=your_gemini_api_key
 GOOGLE_CLOUD_PROJECT=your_gcp_project_id
 GOOGLE_CLOUD_REGION=us-central1
-GCS_BUCKET_NAME=vox-voice-profiles
+GCS_BUCKET_NAME=lorem-voice-profily
 REDIS_URL=redis://localhost:6379  # Optional
 ```
 

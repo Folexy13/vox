@@ -38,7 +38,7 @@ spec:
         - name: GOOGLE_CLOUD_PROJECT
           value: lorem
         - name: GCS_BUCKET_NAME
-          value: vox-voice-profiles
+          value: lorem-voice-profily
         - name: GOOGLE_API_KEY
           value: AIzaSyCzwtB8hdAuUfcWPv_36TVI3m-uavGqL1s
         - name: REDIS_URL
