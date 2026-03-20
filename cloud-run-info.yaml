@@ -9,8 +9,8 @@ metadata:
     run.googleapis.com/maxScale: '100'
     run.googleapis.com/operation-id: ed3948ad-0c55-45bf-bcef-0ad1222321d6
     run.googleapis.com/urls: '["https://vox-backend-983685524483.us-central1.run.app","https://vox-backend-7b2t2ijh3q-uc.a.run.app"]'
-    serving.knative.dev/creator: aluko@preplink.ai
-    serving.knative.dev/lastModifier: aluko@preplink.ai
+    serving.knative.dev/creator: aluko@lorem.ai
+    serving.knative.dev/lastModifier: aluko@lorem.ai
   creationTimestamp: '2026-03-16T21:08:58.149228Z'
   generation: 3
   labels:
@@ -36,14 +36,14 @@ spec:
       containers:
       - env:
         - name: GOOGLE_CLOUD_PROJECT
-          value: preplink
+          value: lorem
         - name: GCS_BUCKET_NAME
           value: vox-voice-profiles
         - name: GOOGLE_API_KEY
           value: AIzaSyCzwtB8hdAuUfcWPv_36TVI3m-uavGqL1s
         - name: REDIS_URL
           value: redis://localhost:6379
-        image: gcr.io/preplink/vox-backend
+        image: gcr.io/lorem/vox-backend
         ports:
         - containerPort: 8080
           name: http1
