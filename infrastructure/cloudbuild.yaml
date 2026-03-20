@@ -60,6 +60,8 @@ steps:
       - '10'
       - '--set-env-vars'
       - 'GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GCS_BUCKET_NAME=${_GCS_BUCKET}'
+      - '--set-secrets'
+      - 'GOOGLE_API_KEY=${_GOOGLE_API_KEY_SECRET}:latest'
     id: 'deploy-backend'
     waitFor: ['push-backend']
 
@@ -67,6 +69,7 @@ steps:
 substitutions:
   _REGION: 'us-central1'
   _GCS_BUCKET: '${PROJECT_ID}-vox-profiles'
+  _GOOGLE_API_KEY_SECRET: 'google-api-key'
 
 # Build options
 options:

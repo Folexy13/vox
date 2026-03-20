@@ -40,13 +40,13 @@ spec:
               memory: 2Gi
           env:
             - name: GOOGLE_CLOUD_PROJECT
-              value: "PROJECT_ID"
+              value: "${GOOGLE_CLOUD_PROJECT}"
             - name: GCS_BUCKET_NAME
-              value: "PROJECT_ID-vox-profiles"
+              value: "${GCS_BUCKET_NAME}"
             - name: GOOGLE_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: google-api-key
+                  name: ${GOOGLE_API_KEY_SECRET_NAME}
                   key: latest
           startupProbe:
             httpGet:

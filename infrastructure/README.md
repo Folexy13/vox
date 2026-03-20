@@ -21,8 +21,11 @@ Deployment scripts and configuration for Google Cloud Platform.
 # Set your project ID
 export GOOGLE_CLOUD_PROJECT=your-project-id
 
-# Set your Gemini API key
+# Set your Gemini API key locally for deployment bootstrap
 export GOOGLE_API_KEY=your-gemini-api-key
+
+# Optional: override default secret name used in Secret Manager
+export GOOGLE_API_KEY_SECRET_NAME=google-api-key
 
 # Run deployment
 chmod +x deploy.sh
@@ -42,7 +45,8 @@ chmod +x deploy.sh
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `GOOGLE_CLOUD_PROJECT` | Yes | Your GCP project ID |
-| `GOOGLE_API_KEY` | Yes | Gemini API key |
+| `GOOGLE_API_KEY` | Bootstrap only | Gemini API key used to create or update a Secret Manager secret during deploy |
+| `GOOGLE_API_KEY_SECRET_NAME` | No | Secret Manager secret name for `GOOGLE_API_KEY` (default: `google-api-key`) |
 | `GOOGLE_CLOUD_REGION` | No | Deployment region (default: us-central1) |
 | `GCS_BUCKET_NAME` | No | Voice profiles bucket (default: {project}-vox-profiles) |
 | `REDIS_URL` | No | Redis connection URL for session management |
@@ -62,8 +66,10 @@ To enable automatic deployments on push:
 
 2. Set up secrets for API keys:
    ```bash
-   echo -n "your-api-key" | gcloud secrets create google-api-key --data-file=-
+   echo -n "your-api-key" | gcloud secrets create google-api-key --data-file=- --replication-policy=automatic
    ```
+
+Cloud Run reads `GOOGLE_API_KEY` from Secret Manager instead of storing the raw value in infrastructure configuration.
 
 ## Architecture
 

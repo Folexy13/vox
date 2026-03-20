@@ -31,8 +31,9 @@ check_env() {
         exit 1
     fi
     
-    if [ -z "$GOOGLE_API_KEY" ]; then
-        echo -e "${YELLOW}Warning: GOOGLE_API_KEY not set. Make sure it's configured in Cloud Run.${NC}"
+    if [ -z "$GOOGLE_API_KEY" ] && [ -z "$GOOGLE_API_KEY_SECRET_NAME" ]; then
+        echo -e "${RED}Error: either GOOGLE_API_KEY or GOOGLE_API_KEY_SECRET_NAME must be set${NC}"
+        exit 1
     fi
 }
 
@@ -47,6 +48,9 @@ REDIS_URL=${REDIS_URL:-""}
 
 # GCS bucket for voice profiles
 GCS_BUCKET_NAME=${GCS_BUCKET_NAME:-"$PROJECT_ID-vox-profiles"}
+
+# Secret names
+GOOGLE_API_KEY_SECRET_NAME=${GOOGLE_API_KEY_SECRET_NAME:-google-api-key}
 
 echo -e "${YELLOW}Configuration:${NC}"
 echo "  Project ID:    $PROJECT_ID"
@@ -100,12 +104,22 @@ echo -e "${BLUE}Step 4: Deploying to Cloud Run...${NC}"
 ENV_VARS="GOOGLE_CLOUD_PROJECT=$PROJECT_ID"
 ENV_VARS="$ENV_VARS,GCS_BUCKET_NAME=$GCS_BUCKET_NAME"
 
-if [ -n "$GOOGLE_API_KEY" ]; then
-    ENV_VARS="$ENV_VARS,GOOGLE_API_KEY=$GOOGLE_API_KEY"
-fi
-
 if [ -n "$REDIS_URL" ]; then
     ENV_VARS="$ENV_VARS,REDIS_URL=$REDIS_URL"
+fi
+
+if [ -n "$GOOGLE_API_KEY" ]; then
+    echo -e "${BLUE}Syncing GOOGLE_API_KEY to Secret Manager...${NC}"
+    if gcloud secrets describe "$GOOGLE_API_KEY_SECRET_NAME" --project="$PROJECT_ID" >/dev/null 2>&1; then
+        printf '%s' "$GOOGLE_API_KEY" | gcloud secrets versions add "$GOOGLE_API_KEY_SECRET_NAME" \
+            --data-file=- \
+            --project="$PROJECT_ID"
+    else
+        printf '%s' "$GOOGLE_API_KEY" | gcloud secrets create "$GOOGLE_API_KEY_SECRET_NAME" \
+            --data-file=- \
+            --replication-policy="automatic" \
+            --project="$PROJECT_ID"
+    fi
 fi
 
 gcloud run deploy $SERVICE_NAME \
@@ -120,6 +134,7 @@ gcloud run deploy $SERVICE_NAME \
     --min-instances 0 \
     --max-instances 10 \
     --set-env-vars "$ENV_VARS" \
+    --set-secrets "GOOGLE_API_KEY=${GOOGLE_API_KEY_SECRET_NAME}:latest" \
     --project=$PROJECT_ID
 
 echo -e "${GREEN}✓ Deployed to Cloud Run${NC}"
@@ -150,4 +165,3 @@ echo ""
 echo "  3. Test the deployment:"
 echo "     curl $SERVICE_URL/health"
 echo ""
-

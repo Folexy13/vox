@@ -1,2 +1,7 @@
 instruction.md
 service_account.json
+*.env
+!.env.example
+**/.env
+!frontend/.env.example
+!infrastructure/.env.example
